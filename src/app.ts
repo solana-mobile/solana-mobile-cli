@@ -7,6 +7,7 @@ import {
   type EmulatorCreateCommandOptions,
   type EmulatorDeleteCommandOptions,
   type EmulatorImagesCommandOptions,
+  type EmulatorImagesDeleteCommandOptions,
   type EmulatorImagesInstallCommandOptions,
   type EmulatorListCommandOptions,
   type EmulatorStartCommandOptions,
@@ -15,6 +16,7 @@ import {
   runEmulatorCreate,
   runEmulatorDelete,
   runEmulatorImages,
+  runEmulatorImagesDelete,
   runEmulatorImagesInstall,
   runEmulatorList,
   runEmulatorStart,
@@ -26,6 +28,7 @@ export type AppOptions = {
   runEmulatorCreate?: (options: EmulatorCreateCommandOptions) => Promise<void>
   runEmulatorDelete?: (options: EmulatorDeleteCommandOptions) => Promise<void>
   runEmulatorImages?: (options: EmulatorImagesCommandOptions) => Promise<void>
+  runEmulatorImagesDelete?: (options: EmulatorImagesDeleteCommandOptions) => Promise<void>
   runEmulatorImagesInstall?: (options: EmulatorImagesInstallCommandOptions) => Promise<void>
   runEmulatorList?: (options: EmulatorListCommandOptions) => Promise<void>
   runEmulatorStart?: (options: EmulatorStartCommandOptions) => Promise<void>
@@ -39,6 +42,7 @@ export function createApp({
   runEmulatorCreate: runEmulatorCreateCommand = runEmulatorCreate,
   runEmulatorDelete: runEmulatorDeleteCommand = runEmulatorDelete,
   runEmulatorImages: runEmulatorImagesCommand = runEmulatorImages,
+  runEmulatorImagesDelete: runEmulatorImagesDeleteCommand = runEmulatorImagesDelete,
   runEmulatorImagesInstall: runEmulatorImagesInstallCommand = runEmulatorImagesInstall,
   runEmulatorList: runEmulatorListCommand = runEmulatorList,
   runEmulatorStart: runEmulatorStartCommand = runEmulatorStart,
@@ -105,6 +109,7 @@ export function createApp({
     .option('--sdk-root <path>', 'Android SDK root')
     .option('--start', 'Start the emulator after creating it')
     .option('--system-image <package>', 'Android system image package')
+    .option('-v, --verbose', 'Verbose output')
     .option('--vm-heap-mb <megabytes>', 'VM heap size in MB', parseIntegerOption)
     .action(async (name: string | undefined, options: Omit<EmulatorCreateCommandOptions, 'name'>) => {
       await runEmulatorCreateCommand({ ...options, name })
@@ -118,24 +123,41 @@ export function createApp({
       await runEmulatorDeleteCommand({ ...options, names: names ?? [] })
     })
 
-  const emulatorImagesCommand = emulatorCommand
-    .command('images')
-    .description('Manage Android system images')
-    .option('--sdk-root <path>', 'Android SDK root')
+  const emulatorImagesCommand = emulatorCommand.command('images').description('Manage Android system images')
 
-  emulatorImagesCommand.action(async (options: EmulatorImagesCommandOptions) => {
-    await runEmulatorImagesCommand(options)
+  emulatorImagesCommand.action(() => {
+    emulatorImagesCommand.outputHelp()
   })
+
+  emulatorImagesCommand
+    .command('delete [systemImages...]')
+    .description('Delete installed Android system images')
+    .option('--sdk-root <path>', 'Android SDK root')
+    .action(
+      async (systemImages: string[] | undefined, options: Omit<EmulatorImagesDeleteCommandOptions, 'systemImages'>) => {
+        await runEmulatorImagesDeleteCommand({ ...options, systemImages: systemImages ?? [] })
+      },
+    )
 
   emulatorImagesCommand
     .command('install [systemImage]')
     .description('Install an Android system image')
+    .option('--all', 'Show all available system images')
     .option('--sdk-root <path>', 'Android SDK root')
+    .option('-v, --verbose', 'Verbose output')
     .action(
       async (systemImage: string | undefined, options: Omit<EmulatorImagesInstallCommandOptions, 'systemImage'>) => {
         await runEmulatorImagesInstallCommand({ ...options, systemImage })
       },
     )
+
+  emulatorImagesCommand
+    .command('list')
+    .description('List installed Android system images')
+    .option('--sdk-root <path>', 'Android SDK root')
+    .action(async (options: EmulatorImagesCommandOptions) => {
+      await runEmulatorImagesCommand(options)
+    })
 
   emulatorCommand
     .command('list')

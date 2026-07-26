@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { parseAvdConfig } from './avd-config.ts'
+import { parseAvdConfig, parseSystemImagePackage } from './avd-config.ts'
 import type { DirectoryReader, InstalledAvd, ListInstalledAvdsDependencies } from './emulator-types.ts'
 
 export async function defaultReadDirectory(directoryPath: string) {
@@ -40,12 +40,28 @@ export async function listInstalledAvds({
       return {
         device: configValues['hw.device.name'],
         name,
+        systemImage: parseAvdSystemImage(configValues['image.sysdir.1']),
         target: configValues.target,
       }
     }),
   )
 
   return avds.sort((left, right) => left.name.localeCompare(right.name))
+}
+
+function parseAvdSystemImage(systemImageDirectory: string | undefined): string | undefined {
+  if (!systemImageDirectory) {
+    return undefined
+  }
+
+  const systemImage = systemImageDirectory.replace(/\/+$/, '').replaceAll('/', ';')
+
+  try {
+    parseSystemImagePackage(systemImage)
+    return systemImage
+  } catch {
+    return undefined
+  }
 }
 
 async function listEntryNames(directoryPath: string, readDirectory: DirectoryReader): Promise<string[]> {

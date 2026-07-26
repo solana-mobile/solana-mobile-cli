@@ -38,7 +38,7 @@ export async function createAvd(
   const sdkRoot = options.sdkRoot ?? resolveAndroidSdkRoot()
   const { emulator } = getToolPaths(sdkRoot)
   const homeDirectory = getHomeDirectory()
-  const avdDirectory = join(homeDirectory, '.android', 'avd', `${name}.avd`)
+  const avdDirectory = getAvdDirectoryPath(homeDirectory, name)
 
   if (await pathExists(avdDirectory)) {
     return {
@@ -121,7 +121,11 @@ export async function defaultWriteTextFile(filePath: string, contents: string) {
 }
 
 function getAvdConfigPath(homeDirectory: string, avdName: string): string {
-  return join(homeDirectory, '.android', 'avd', `${avdName}.avd`, 'config.ini')
+  return join(getAvdDirectoryPath(homeDirectory, avdName), 'config.ini')
+}
+
+export function getAvdDirectoryPath(homeDirectory: string, avdName: string): string {
+  return join(homeDirectory, '.android', 'avd', `${avdName}.avd`)
 }
 
 async function defaultReadTextFile(filePath: string) {

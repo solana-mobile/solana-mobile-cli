@@ -11,6 +11,7 @@ import type {
   EmulatorCreateCommandOptions,
   EmulatorDeleteCommandOptions,
   EmulatorImagesCommandOptions,
+  EmulatorImagesDeleteCommandOptions,
   EmulatorImagesInstallCommandOptions,
   EmulatorStartCommandOptions,
   EmulatorStatusCommandOptions,
@@ -221,7 +222,7 @@ describe('app', () => {
     expect(emulatorListOptions).toEqual([{}])
   })
 
-  test('delegates emulator images command options', async () => {
+  test('does not delegate emulator images command to list', async () => {
     const emulatorImagesOptions: EmulatorImagesCommandOptions[] = []
     const app = createApp({
       runEmulatorImages: async (options) => {
@@ -229,9 +230,50 @@ describe('app', () => {
       },
     })
 
-    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'images', '--sdk-root', '/sdk'])
+    const emulatorImagesCommand = app.commands
+      .find((command) => command.name() === 'emulator')
+      ?.commands.find((command) => command.name() === 'images')
 
-    expect(emulatorImagesOptions).toEqual([{ sdkRoot: '/sdk' }])
+    emulatorImagesCommand?.configureOutput({
+      writeErr: () => {},
+      writeOut: () => {},
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'images'])
+
+    expect(emulatorImagesCommand?.commands.map((command) => command.name())).toEqual(['delete', 'install', 'list'])
+    expect(emulatorImagesOptions).toEqual([])
+  })
+
+  test('delegates emulator images delete command options', async () => {
+    const emulatorImagesDeleteOptions: EmulatorImagesDeleteCommandOptions[] = []
+    const app = createApp({
+      runEmulatorImagesDelete: async (options) => {
+        emulatorImagesDeleteOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'emulator',
+      'images',
+      'delete',
+      'system-images/android-35/google_apis_playstore/arm64-v8a',
+      'system-images/android-36/google_apis_playstore/arm64-v8a',
+      '--sdk-root',
+      '/sdk',
+    ])
+
+    expect(emulatorImagesDeleteOptions).toEqual([
+      {
+        sdkRoot: '/sdk',
+        systemImages: [
+          'system-images/android-35/google_apis_playstore/arm64-v8a',
+          'system-images/android-36/google_apis_playstore/arm64-v8a',
+        ],
+      },
+    ])
   })
 
   test('delegates emulator images install command options', async () => {
@@ -249,16 +291,33 @@ describe('app', () => {
       'images',
       'install',
       'system-images/android-36.1/google_apis_playstore/arm64-v8a',
+      '--all',
       '--sdk-root',
       '/sdk',
+      '--verbose',
     ])
 
     expect(emulatorImagesInstallOptions).toEqual([
       {
+        all: true,
         sdkRoot: '/sdk',
         systemImage: 'system-images/android-36.1/google_apis_playstore/arm64-v8a',
+        verbose: true,
       },
     ])
+  })
+
+  test('delegates emulator images list command options', async () => {
+    const emulatorImagesOptions: EmulatorImagesCommandOptions[] = []
+    const app = createApp({
+      runEmulatorImages: async (options) => {
+        emulatorImagesOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'images', 'list', '--sdk-root', '/sdk'])
+
+    expect(emulatorImagesOptions).toEqual([{ sdkRoot: '/sdk' }])
   })
 
   test('delegates emulator create command options', async () => {
@@ -290,6 +349,7 @@ describe('app', () => {
       '--start',
       '--system-image',
       'system-images;android-36;google_apis_playstore;arm64-v8a',
+      '--verbose',
       '--vm-heap-mb',
       '384',
     ])
@@ -305,6 +365,7 @@ describe('app', () => {
         sdkRoot: '/sdk',
         start: true,
         systemImage: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+        verbose: true,
         vmHeapMb: 384,
       },
     ])
