@@ -655,6 +655,42 @@ Available packages:
     ])
   })
 
+  test('refuses to delete a running emulator with an invocation-aware stop command', async () => {
+    const commands: Array<[string, ...string[]]> = []
+
+    await expect(
+      runEmulatorDelete(
+        {
+          names: ['Alpha'],
+          sdkRoot: '/sdk',
+        },
+        {
+          formatCommand: (command) => `npx solana-mobile ${command}`,
+          runCommand: async (cmd) => {
+            commands.push(cmd)
+
+            if (cmd.join(' ') === 'adb devices') {
+              return 'List of devices attached\nemulator-5554 device\n'
+            }
+
+            if (cmd.join(' ') === 'adb -s emulator-5554 emu avd name') {
+              return 'Alpha\nOK\n'
+            }
+
+            throw new Error(`Unexpected command: ${cmd.join(' ')}`)
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      'Cannot delete running emulator: Alpha (emulator-5554)\nStop it first with: npx solana-mobile emulator stop Alpha',
+    )
+
+    expect(commands).toEqual([
+      ['adb', 'devices'],
+      ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
+    ])
+  })
+
   test('selects installed emulators before deleting when names are omitted', async () => {
     const homeDirectory = await createTemporaryDirectory('solana-mobile-avd-delete-select-')
     const commands: Array<[string, ...string[]]> = []
@@ -685,7 +721,10 @@ Available packages:
         },
       )
 
-      expect(commands).toEqual([['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Beta']])
+      expect(commands).toEqual([
+        ['adb', 'devices'],
+        ['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Beta'],
+      ])
     } finally {
       await rm(homeDirectory, { force: true, recursive: true })
     }
