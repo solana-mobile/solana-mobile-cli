@@ -4,6 +4,7 @@
 *.tsbuildinfo
 dist
 node_modules
+.worktrees
 
 # START Ruler Generated Files
 /.gemini/settings.json
