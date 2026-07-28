@@ -1,4 +1,4 @@
-import { intro } from '@clack/prompts'
+import { cancel, intro, outro } from '@clack/prompts'
 import { systemImagePackageToRelativeDirectory } from './data-access/avd-config.ts'
 import type {
   DirectoryReader,
@@ -22,36 +22,55 @@ import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectSystemImage } from './ui/emulator-ui-select-system-image.ts'
 
 interface RunEmulatorImagesDependencies {
+  cancel?: (message: string) => void
   intro?: (message: string) => void
   log?: (message: string) => void
+  outro?: (message: string) => void
   pathExists?: PathChecker
   readDirectory?: DirectoryReader
 }
 
 interface RunEmulatorImagesInstallDependencies extends PromptDependencies, SystemImagePackageManagerDependencies {
   architecture?: string
+  cancel?: (message: string) => void
   intro?: (message: string) => void
   log?: (message: string) => void
+  outro?: (message: string) => void
 }
 
 export async function runEmulatorImages(
   options: EmulatorImagesCommandOptions = {},
-  { intro: showIntro = intro, log = console.log, pathExists, readDirectory }: RunEmulatorImagesDependencies = {},
-) {
-  showIntro('solana-mobile emulator images')
-
-  const systemImages = await listInstalledSystemImages(options.sdkRoot ?? resolveAndroidSdkRoot(), {
+  {
+    cancel: showCancel = cancel,
+    intro: showIntro = intro,
+    log = console.log,
+    outro: showOutro = outro,
     pathExists,
     readDirectory,
-  })
+  }: RunEmulatorImagesDependencies = {},
+) {
+  try {
+    showIntro('solana-mobile emulator images')
 
-  if (systemImages.length === 0) {
-    log(NO_INSTALLED_SYSTEM_IMAGES_MESSAGE)
-    return
-  }
+    const systemImages = await listInstalledSystemImages(options.sdkRoot ?? resolveAndroidSdkRoot(), {
+      pathExists,
+      readDirectory,
+    })
 
-  for (const systemImage of systemImages) {
-    log(systemImage)
+    if (systemImages.length === 0) {
+      log(NO_INSTALLED_SYSTEM_IMAGES_MESSAGE)
+      showOutro('Done')
+      return
+    }
+
+    for (const systemImage of systemImages) {
+      log(systemImage)
+    }
+
+    showOutro('Done')
+  } catch (error) {
+    showCancel(`${error}`)
+    process.exitCode = 1
   }
 }
 
@@ -59,8 +78,10 @@ export async function runEmulatorImagesInstall(
   options: EmulatorImagesInstallCommandOptions = {},
   {
     architecture = process.arch,
+    cancel: showCancel = cancel,
     intro: showIntro = intro,
     log = console.log,
+    outro: showOutro = outro,
     pathExists,
     readDirectory,
     runCommand,
@@ -68,50 +89,58 @@ export async function runEmulatorImagesInstall(
     runSelect,
   }: RunEmulatorImagesInstallDependencies = {},
 ) {
-  showIntro('solana-mobile emulator images install')
+  try {
+    showIntro('solana-mobile emulator images install')
 
-  const sdkRoot = options.sdkRoot ?? resolveAndroidSdkRoot()
-  const requestedSystemImage = options.systemImage ? normalizeSystemImagePackage(options.systemImage) : undefined
-  const installedSystemImages = await listInstalledSystemImages(sdkRoot, { pathExists, readDirectory })
+    const sdkRoot = options.sdkRoot ?? resolveAndroidSdkRoot()
+    const requestedSystemImage = options.systemImage ? normalizeSystemImagePackage(options.systemImage) : undefined
+    const installedSystemImages = await listInstalledSystemImages(sdkRoot, { pathExists, readDirectory })
 
-  if (requestedSystemImage && installedSystemImages.includes(requestedSystemImage)) {
-    log(`System image is already installed: ${requestedSystemImage}`)
-    return
-  }
+    if (requestedSystemImage && installedSystemImages.includes(requestedSystemImage)) {
+      log(`System image is already installed: ${requestedSystemImage}`)
+      showOutro('Done')
+      return
+    }
 
-  const availableSystemImages = await listAvailableSystemImages(sdkRoot, {
-    pathExists,
-    readDirectory,
-    runCommand,
-  })
-  const compatibleSystemImages = filterCompatibleSystemImages(availableSystemImages, architecture)
-  const installableSystemImages = compatibleSystemImages.filter(
-    (systemImage) => !installedSystemImages.includes(systemImage),
-  )
-
-  if (requestedSystemImage && !installableSystemImages.includes(requestedSystemImage)) {
-    throw new Error(
-      `System image is not available: ${requestedSystemImage}\n${formatAvailableSystemImages(installableSystemImages)}`,
+    const availableSystemImages = await listAvailableSystemImages(sdkRoot, {
+      pathExists,
+      readDirectory,
+      runCommand,
+    })
+    const compatibleSystemImages = filterCompatibleSystemImages(availableSystemImages, architecture)
+    const installableSystemImages = compatibleSystemImages.filter(
+      (systemImage) => !installedSystemImages.includes(systemImage),
     )
+
+    if (requestedSystemImage && !installableSystemImages.includes(requestedSystemImage)) {
+      throw new Error(
+        `System image is not available: ${requestedSystemImage}\n${formatAvailableSystemImages(installableSystemImages)}`,
+      )
+    }
+
+    if (installableSystemImages.length === 0) {
+      log(`No uninstalled Google Play system images are available for ${architecture}.`)
+      showOutro('Done')
+      return
+    }
+
+    const systemImage = requestedSystemImage ?? (await selectSystemImage(installableSystemImages, runSelect))
+
+    if (!systemImage) {
+      return
+    }
+
+    await installSystemImage(systemImage, sdkRoot, {
+      pathExists,
+      readDirectory,
+      runInteractiveCommand,
+    })
+    log(`Installed system image: ${systemImage}`)
+    showOutro('Done')
+  } catch (error) {
+    showCancel(`${error}`)
+    process.exitCode = 1
   }
-
-  if (installableSystemImages.length === 0) {
-    log(`No uninstalled Google Play system images are available for ${architecture}.`)
-    return
-  }
-
-  const systemImage = requestedSystemImage ?? (await selectSystemImage(installableSystemImages, runSelect))
-
-  if (!systemImage) {
-    return
-  }
-
-  await installSystemImage(systemImage, sdkRoot, {
-    pathExists,
-    readDirectory,
-    runInteractiveCommand,
-  })
-  log(`Installed system image: ${systemImage}`)
 }
 
 function formatAvailableSystemImages(systemImages: readonly string[]): string {

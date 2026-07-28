@@ -1,4 +1,5 @@
 import { homedir } from 'node:os'
+import { cancel, intro, outro } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { deleteInstalledAvds } from './data-access/delete-installed-avds.ts'
 import type {
@@ -16,43 +17,58 @@ interface RunEmulatorDeleteDependencies
   extends DeleteInstalledAvdsDependencies,
     ListInstalledAvdsDependencies,
     PromptDependencies {
+  cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
+  intro?: (message: string) => void
+  outro?: (message: string) => void
 }
 
 export async function runEmulatorDelete(
   options: EmulatorDeleteCommandOptions,
   {
+    cancel: showCancel = cancel,
     formatCommand = formatCliCommand,
     getHomeDirectory = homedir,
+    intro: showIntro = intro,
+    outro: showOutro = outro,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
     runCommand = runExecutable,
     runMultiselect,
   }: RunEmulatorDeleteDependencies = {},
 ) {
-  const names =
-    options.names && options.names.length > 0
-      ? options.names
-      : await selectInstalledEmulatorNames(
-          await listInstalledAvds({ getHomeDirectory, readDirectory, readTextFile }),
-          runMultiselect,
-        )
+  try {
+    showIntro('solana-mobile emulator delete')
 
-  if (!names || names.length === 0) {
-    return
-  }
+    const names =
+      options.names && options.names.length > 0
+        ? options.names
+        : await selectInstalledEmulatorNames(
+            await listInstalledAvds({ getHomeDirectory, readDirectory, readTextFile }),
+            runMultiselect,
+          )
 
-  const runningEmulator = (await listRunningEmulators({ runCommand })).find(({ name }) => names.includes(name))
+    if (!names || names.length === 0) {
+      return
+    }
 
-  if (runningEmulator) {
-    throw new Error(
-      `Cannot delete running emulator: ${runningEmulator.name} (${runningEmulator.serial})\nStop it first with: ${formatCommand(`emulator stop ${runningEmulator.name}`)}`,
-    )
-  }
+    const runningEmulator = (await listRunningEmulators({ runCommand })).find(({ name }) => names.includes(name))
 
-  await deleteInstalledAvds(names, options.sdkRoot, { runCommand })
+    if (runningEmulator) {
+      throw new Error(
+        `Cannot delete running emulator: ${runningEmulator.name} (${runningEmulator.serial})\nStop it first with: ${formatCommand(`emulator stop ${runningEmulator.name}`)}`,
+      )
+    }
 
-  for (const name of names) {
-    console.log(`Deleted emulator: ${name}`)
+    await deleteInstalledAvds(names, options.sdkRoot, { runCommand })
+
+    for (const name of names) {
+      console.log(`Deleted emulator: ${name}`)
+    }
+
+    showOutro('Done')
+  } catch (error) {
+    showCancel(`${error}`)
+    process.exitCode = 1
   }
 }
