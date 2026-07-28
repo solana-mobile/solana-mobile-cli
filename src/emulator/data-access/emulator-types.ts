@@ -13,6 +13,7 @@ export interface EmulatorCreateCommandOptions {
   sdkRoot?: string
   start?: boolean
   systemImage?: string
+  verbose?: boolean
   vmHeapMb?: number
 }
 
@@ -25,9 +26,16 @@ export interface EmulatorImagesCommandOptions {
   sdkRoot?: string
 }
 
+export interface EmulatorImagesDeleteCommandOptions {
+  sdkRoot?: string
+  systemImages?: string[]
+}
+
 export interface EmulatorImagesInstallCommandOptions {
+  all?: boolean
   sdkRoot?: string
   systemImage?: string
+  verbose?: boolean
 }
 
 export type EmulatorListCommandOptions = Record<string, never>
@@ -95,6 +103,7 @@ export type InteractiveCommandRunner = (cmd: [string, ...string[]]) => Promise<v
 export interface InstalledAvd {
   device?: string
   name: string
+  systemImage?: string
   target?: string
 }
 

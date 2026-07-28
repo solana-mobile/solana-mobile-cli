@@ -6,7 +6,7 @@ import { defaultReadDirectory } from './list-installed-avds.ts'
 
 export const NO_INSTALLED_SYSTEM_IMAGES_MESSAGE = [
   'No Android system images are installed.',
-  'Install a compatible Google Play image with:',
+  'Install an Android system image with:',
   '  solana-mobile emulator images install',
 ].join('\n')
 
@@ -69,7 +69,7 @@ export function selectDefaultSystemImage(installedSystemImages: readonly string[
   const googlePlaySystemImages = standardSystemImages.length > 0 ? standardSystemImages : sixteenKilobyteSystemImages
 
   if (googlePlaySystemImages.length === 0) {
-    throw new Error(`No installed Google Play system images found.\n${formatSystemImageHelp(installedSystemImages)}`)
+    throw new Error(`No supported Android system images found.\n${formatSystemImageHelp(installedSystemImages)}`)
   }
 
   return sortSystemImagesNewestFirst(googlePlaySystemImages)[0] as string
@@ -80,10 +80,15 @@ export function sortSystemImagesNewestFirst(systemImages: readonly string[]): st
 }
 
 function compareSystemImagesNewestFirst(left: string, right: string): number {
-  const leftPlatform = parseSystemImagePackage(left).platform
-  const rightPlatform = parseSystemImagePackage(right).platform
+  const leftPackage = parseSystemImagePackage(left)
+  const rightPackage = parseSystemImagePackage(right)
+  const platformComparison = rightPackage.platform.localeCompare(leftPackage.platform, 'en', { numeric: true })
 
-  return rightPlatform.localeCompare(leftPlatform, 'en', { numeric: true }) || left.localeCompare(right)
+  return (
+    platformComparison ||
+    getSystemImageTagPriority(leftPackage.tagId) - getSystemImageTagPriority(rightPackage.tagId) ||
+    left.localeCompare(right)
+  )
 }
 
 function defaultPathExists(filePath: string): Promise<boolean> {
@@ -93,12 +98,24 @@ function defaultPathExists(filePath: string): Promise<boolean> {
   )
 }
 
+function getSystemImageTagPriority(tagId: string): number {
+  if (tagId === 'google_apis_playstore') {
+    return 0
+  }
+
+  if (tagId === 'google_apis_playstore_ps16k') {
+    return 1
+  }
+
+  return 2
+}
+
 function formatSystemImageHelp(installedSystemImages: readonly string[]): string {
   if (installedSystemImages.length === 0) {
     return NO_INSTALLED_SYSTEM_IMAGES_MESSAGE
   }
 
-  return `Installed system images:\n- ${installedSystemImages.join('\n- ')}\nList them with: solana-mobile emulator images`
+  return `Installed system images:\n- ${installedSystemImages.join('\n- ')}\nList them with: solana-mobile emulator images list`
 }
 
 async function listDirectoryNames(directoryPath: string, readDirectory: DirectoryReader): Promise<string[]> {

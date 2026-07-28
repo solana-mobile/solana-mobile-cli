@@ -24,7 +24,7 @@ Examples below use `npx`; replace it with `pnpx` or `bun x` if you prefer pnpm o
 ### Manage Android emulators
 
 ```bash
-# Create or update an emulator by answering prompts
+# Create or update an emulator, installing a system image when needed
 npx solana-mobile emulator create
 
 # Create or update a named emulator
@@ -36,14 +36,23 @@ npx solana-mobile emulator delete
 # Delete emulators by name
 npx solana-mobile emulator delete local_phone
 
-# List installed Android system images
-npx solana-mobile emulator images
+# Delete Android system images by choosing from installed images
+npx solana-mobile emulator images delete
 
-# Install a compatible Google Play system image by choosing from available packages
+# Delete specific Android system images
+npx solana-mobile emulator images delete system-images/android-35/google_apis_playstore/arm64-v8a
+
+# Install an image for the latest installed Android platform
 npx solana-mobile emulator images install
 
-# Install a specific Google Play system image
+# Install by choosing from all available system images
+npx solana-mobile emulator images install --all
+
+# Install a specific Android system image
 npx solana-mobile emulator images install system-images/android-36.1/google_apis_playstore/arm64-v8a
+
+# List installed Android system images
+npx solana-mobile emulator images list
 
 # List installed emulators
 npx solana-mobile emulator list
