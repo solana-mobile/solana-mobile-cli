@@ -3,7 +3,7 @@
     "solana-mobile": "dist/cli.mjs"
   },
   "bugs": {
-    "url": "https://github.com/beeman/solana-mobile/issues"
+    "url": "https://github.com/solana-mobile/solana-mobile-cli/issues"
   },
   "dependencies": {
     "@clack/prompts": "1.6.0",
@@ -25,12 +25,12 @@
   "files": [
     "dist"
   ],
-  "homepage": "https://github.com/beeman/solana-mobile#readme",
-  "license": "MIT",
+  "homepage": "https://github.com/solana-mobile/solana-mobile-cli#readme",
+  "license": "Apache-2.0",
   "name": "solana-mobile",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/beeman/solana-mobile.git"
+    "url": "git+https://github.com/solana-mobile/solana-mobile-cli.git"
   },
   "scripts": {
     "build": "tsdown",
