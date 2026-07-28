@@ -382,29 +382,34 @@ Available packages:
 
   test('rejects an unavailable image with compatible options', async () => {
     const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-unavailable-')
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
 
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
 
-      await expect(
-        runEmulatorImagesInstall(
-          {
-            sdkRoot,
-            systemImage: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+      await runEmulatorImagesInstall(
+        {
+          sdkRoot,
+          systemImage: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+        },
+        {
+          architecture: 'arm64',
+          cancel: (message) => cancellations.push(message),
+          runCommand: async () =>
+            `  system-images/android-35/google_apis_playstore/arm64-v8a  9.0.0  Google Play ARM 64 v8a System Image\n`,
+          runInteractiveCommand: async () => {
+            throw new Error('Unexpected system image install.')
           },
-          {
-            architecture: 'arm64',
-            runCommand: async () =>
-              `  system-images/android-35/google_apis_playstore/arm64-v8a  9.0.0  Google Play ARM 64 v8a System Image\n`,
-            runInteractiveCommand: async () => {
-              throw new Error('Unexpected system image install.')
-            },
-          },
-        ),
-      ).rejects.toThrow(
-        'System image is not available: system-images;android-36;google_apis_playstore;arm64-v8a\nAvailable compatible Google Play system images:\n- system-images/android-35/google_apis_playstore/arm64-v8a',
+        },
       )
+
+      expect(cancellations).toEqual([
+        'Error: System image is not available: system-images;android-36;google_apis_playstore;arm64-v8a\nAvailable compatible Google Play system images:\n- system-images/android-35/google_apis_playstore/arm64-v8a',
+      ])
+      expect(process.exitCode).toBe(1)
     } finally {
+      process.exitCode = previousExitCode ?? 0
       await rm(sdkRoot, { force: true, recursive: true })
     }
   })
@@ -656,15 +661,18 @@ Available packages:
   })
 
   test('refuses to delete a running emulator with an invocation-aware stop command', async () => {
+    const previousExitCode = process.exitCode
     const commands: Array<[string, ...string[]]> = []
+    const cancellations: string[] = []
 
-    await expect(
-      runEmulatorDelete(
+    try {
+      await runEmulatorDelete(
         {
           names: ['Alpha'],
           sdkRoot: '/sdk',
         },
         {
+          cancel: (message) => cancellations.push(message),
           formatCommand: (command) => `npx solana-mobile ${command}`,
           runCommand: async (cmd) => {
             commands.push(cmd)
@@ -680,15 +688,19 @@ Available packages:
             throw new Error(`Unexpected command: ${cmd.join(' ')}`)
           },
         },
-      ),
-    ).rejects.toThrow(
-      'Cannot delete running emulator: Alpha (emulator-5554)\nStop it first with: npx solana-mobile emulator stop Alpha',
-    )
+      )
 
-    expect(commands).toEqual([
-      ['adb', 'devices'],
-      ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
-    ])
+      expect(cancellations).toEqual([
+        'Error: Cannot delete running emulator: Alpha (emulator-5554)\nStop it first with: npx solana-mobile emulator stop Alpha',
+      ])
+      expect(process.exitCode).toBe(1)
+      expect(commands).toEqual([
+        ['adb', 'devices'],
+        ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
+      ])
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
   })
 
   test('selects installed emulators before deleting when names are omitted', async () => {
