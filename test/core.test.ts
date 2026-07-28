@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import type { CreateAppArgs, TemplateJsonTemplate } from 'create-solana-dapp'
 import { createApp, runApp } from '../src/app.ts'
 import { readPackageMetadata } from '../src/core/data-access/package-metadata.ts'
+import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
 import { readPackageString } from '../src/core/util/read-package-string.ts'
 import type { CreateCommandOptions, CreateSolanaDappApi } from '../src/create/create-feature-index.ts'
 import { runCreate } from '../src/create/create-feature-index.ts'
@@ -30,6 +31,72 @@ const template: TemplateJsonTemplate = {
 }
 
 describe('core', () => {
+  test('formats direct CLI commands', () => {
+    expect(formatCliCommand('emulator stop Alpha', {})).toBe('solana-mobile emulator stop Alpha')
+  })
+
+  test('formats npx CLI commands', () => {
+    expect(
+      formatCliCommand('emulator stop Alpha', {
+        npm_command: 'exec',
+        npm_lifecycle_event: 'npx',
+      }),
+    ).toBe('npx solana-mobile emulator stop Alpha')
+  })
+
+  test('formats bunx CLI commands', () => {
+    expect(
+      formatCliCommand('emulator stop Alpha', {
+        npm_command: 'exec',
+        npm_lifecycle_event: 'bunx',
+      }),
+    ).toBe('bunx solana-mobile emulator stop Alpha')
+  })
+
+  test('formats pnpm dlx CLI commands', () => {
+    expect(
+      formatCliCommand('emulator stop Alpha', {
+        npm_config_user_agent: 'pnpm/10.33.0 npm/? node/v24.5.0 darwin arm64',
+      }),
+    ).toBe('pnpm dlx solana-mobile emulator stop Alpha')
+  })
+
+  test('formats yarn dlx CLI commands', () => {
+    expect(
+      formatCliCommand('emulator stop Alpha', {
+        npm_config_user_agent: 'yarn/4.9.2 npm/? node/v24.5.0 darwin arm64',
+      }),
+    ).toBe('yarn dlx solana-mobile emulator stop Alpha')
+  })
+
+  test('does not treat pnpm exec as pnpm dlx', () => {
+    expect(
+      formatCliCommand('emulator stop Alpha', {
+        npm_command: 'exec',
+        npm_config_user_agent: 'pnpm/10.33.0 npm/? node/v24.5.0 darwin arm64',
+      }),
+    ).toBe('solana-mobile emulator stop Alpha')
+  })
+
+  test('does not treat pnpm run as pnpm dlx', () => {
+    expect(
+      formatCliCommand('emulator stop Alpha', {
+        npm_command: 'run-script',
+        npm_config_user_agent: 'pnpm/10.33.0 npm/? node/v24.5.0 darwin arm64',
+        npm_lifecycle_event: 'mytest',
+      }),
+    ).toBe('solana-mobile emulator stop Alpha')
+  })
+
+  test('does not treat yarn run as yarn dlx', () => {
+    expect(
+      formatCliCommand('emulator stop Alpha', {
+        npm_config_user_agent: 'yarn/1.22.22 npm/? node/v24.5.0 darwin arm64',
+        npm_lifecycle_event: 'mytest',
+      }),
+    ).toBe('solana-mobile emulator stop Alpha')
+  })
+
   test('reads package metadata', () => {
     expect(readPackageMetadata()).toEqual({
       description: packageJson.description,

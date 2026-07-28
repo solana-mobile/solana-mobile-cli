@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
+import { formatCliCommand } from '../../core/util/format-cli-command.ts'
 import type { InstalledAvd } from '../../emulator/data-access/emulator-types.ts'
 import { listInstalledAvds } from '../../emulator/data-access/list-installed-avds.ts'
 import type { DoctorCheckResult } from './doctor-check-result.ts'
@@ -53,7 +54,9 @@ export async function checkAndroidDevices(
       ? `Detected ${avdNames.length} installed Android emulator(s).`
       : 'No Android emulators are installed.',
     name: 'Android emulators',
-    recommendation: avdNames.length ? undefined : 'Create one with: npx solana-mobile emulator create',
+    recommendation: avdNames.length
+      ? undefined
+      : `Create one with: ${formatCliCommand('emulator create', environment.environment)}`,
     status: avdNames.length ? 'pass' : 'warn',
   }
   if (!adbAvailable)

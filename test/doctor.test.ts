@@ -166,6 +166,21 @@ describe('adb devices parsing', () => {
     expect(checks.find(({ name }) => name === 'Android emulators')?.status).toBe('warn')
     expect(checks.find(({ name }) => name === 'Running emulators')?.status).toBe('info')
   })
+  test('recommends an invocation-aware command to create an emulator', async () => {
+    const checks = await checkAndroidDevices(
+      environment({
+        environment: { npm_command: 'exec', npm_lifecycle_event: 'npx' },
+        pathExists: async (path) => path === '/bin/adb',
+        runCommand: async (path) => ({ path, stderr: '', stdout: 'List of devices attached\n' }),
+      }),
+      true,
+      undefined,
+      [],
+    )
+    expect(checks.find(({ name }) => name === 'Android emulators')?.recommendation).toBe(
+      'Create one with: npx solana-mobile emulator create',
+    )
+  })
   test('reports unauthorized physical devices with a specific recommendation', async () => {
     const checks = await checkAndroidDevices(
       environment({
