@@ -318,12 +318,18 @@ describe('emulator', () => {
           getHomeDirectory: () => homeDirectory,
           intro: (message) => intros.push(message),
           log: (message) => logs.push(message),
-          runInteractiveCommand: async (cmd) => {
+          runCommand: async (cmd) => {
             commands.push(cmd)
+            return ''
           },
           runMultiselect: async () => {
             throw new Error('Unexpected system image prompt.')
           },
+          spinner: () => ({
+            clear: () => {},
+            error: () => {},
+            start: () => {},
+          }),
         },
       )
 
@@ -363,9 +369,15 @@ describe('emulator', () => {
           getHomeDirectory: () => homeDirectory,
           intro: () => {},
           log: () => {},
-          runInteractiveCommand: async (cmd) => {
+          runCommand: async (cmd) => {
             commands.push(cmd)
+            return ''
           },
+          spinner: () => ({
+            clear: () => {},
+            error: () => {},
+            start: () => {},
+          }),
         },
       )
 
@@ -489,8 +501,9 @@ describe('emulator', () => {
         {
           getHomeDirectory: () => homeDirectory,
           log: () => {},
-          runInteractiveCommand: async (cmd) => {
+          runCommand: async (cmd) => {
             commands.push(cmd)
+            return ''
           },
           runMultiselect: async (options) => {
             expect(options.message).toBe('Select system images to delete')
@@ -502,10 +515,54 @@ describe('emulator', () => {
             expect(options.required).toBe(false)
             return [systemImages[1] as string]
           },
+          spinner: () => ({
+            clear: () => {},
+            error: () => {},
+            start: () => {},
+          }),
         },
       )
 
       expect(commands).toEqual([[sdkmanager, '--uninstall', systemImages[1] as string]])
+    } finally {
+      await rm(rootDirectory, { force: true, recursive: true })
+    }
+  })
+
+  test('deletes system images with raw interactive output when verbose', async () => {
+    const rootDirectory = await createTemporaryDirectory('solana-mobile-system-image-delete-verbose-')
+    const homeDirectory = join(rootDirectory, 'home')
+    const sdkRoot = join(rootDirectory, 'sdk')
+    const sdkmanager = join(sdkRoot, 'cmdline-tools', '22.0', 'bin', 'sdkmanager')
+    const systemImage = 'system-images;android-35;google_apis_playstore;arm64-v8a'
+    const commands: Array<[string, ...string[]]> = []
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'sdkmanager', '22.0')
+      await installSystemImage(sdkRoot, systemImage)
+
+      await runEmulatorImagesDelete(
+        {
+          sdkRoot,
+          systemImages: [systemImage],
+          verbose: true,
+        },
+        {
+          getHomeDirectory: () => homeDirectory,
+          log: () => {},
+          runCommand: async () => {
+            throw new Error('Unexpected non-interactive uninstall.')
+          },
+          runInteractiveCommand: async (cmd) => {
+            commands.push(cmd)
+          },
+          spinner: () => {
+            throw new Error('Unexpected uninstall spinner.')
+          },
+        },
+      )
+
+      expect(commands).toEqual([[sdkmanager, '--uninstall', systemImage]])
     } finally {
       await rm(rootDirectory, { force: true, recursive: true })
     }

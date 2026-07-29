@@ -19,11 +19,6 @@ export async function selectInstalledEmulatorName(
   message: string,
   runSelect: SelectPrompt = select as SelectPrompt,
 ): Promise<string | undefined> {
-  if (avds.length === 0) {
-    console.log('No Android emulators found.')
-    return undefined
-  }
-
   const selected = await runSelect({
     message,
     options: avds.map(createInstalledEmulatorOption),

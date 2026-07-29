@@ -1,8 +1,9 @@
 import type { InstalledAvd } from '../data-access/emulator-types.ts'
+import { NO_INSTALLED_EMULATORS_MESSAGE } from './emulator-ui-messages.ts'
 
 export function renderInstalledEmulators(avds: readonly InstalledAvd[]) {
   if (avds.length === 0) {
-    console.log('No Android emulators found.')
+    console.log(NO_INSTALLED_EMULATORS_MESSAGE)
     return
   }
 

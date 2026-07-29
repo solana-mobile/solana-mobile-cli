@@ -1,8 +1,9 @@
 import type { EmulatorStatus } from '../data-access/emulator-types.ts'
+import { NO_INSTALLED_EMULATORS_MESSAGE } from './emulator-ui-messages.ts'
 
 export function renderEmulatorStatuses(statuses: readonly EmulatorStatus[]) {
   if (statuses.length === 0) {
-    console.log('No Android emulators found.')
+    console.log(NO_INSTALLED_EMULATORS_MESSAGE)
     return
   }
 

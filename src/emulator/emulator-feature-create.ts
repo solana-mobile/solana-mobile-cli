@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { cancel, intro, outro } from '@clack/prompts'
+import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { resolveEmulatorProfile } from './data-access/avd-config.ts'
 import { createAvd, defaultPathExists, defaultWriteTextFile, getAvdDirectoryPath } from './data-access/create-avd.ts'
@@ -34,7 +34,7 @@ export async function runEmulatorCreate(
     formatCommand = formatCliCommand,
     getHomeDirectory = homedir,
     intro: showIntro = intro,
-    log = console.log,
+    log = clackLog.message,
     outro: showOutro = outro,
     pathExists = defaultPathExists(),
     readDirectory = defaultReadDirectory,
@@ -86,6 +86,9 @@ export async function runEmulatorCreate(
         )
 
         if (!systemImage) {
+          if (!process.exitCode) {
+            showOutro('Done')
+          }
           return
         }
       }
