@@ -20,6 +20,7 @@ interface RunEmulatorDeleteDependencies
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
+  log?: (message: string) => void
   outro?: (message: string) => void
 }
 
@@ -30,6 +31,7 @@ export async function runEmulatorDelete(
     formatCommand = formatCliCommand,
     getHomeDirectory = homedir,
     intro: showIntro = intro,
+    log = console.log,
     outro: showOutro = outro,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
@@ -63,7 +65,7 @@ export async function runEmulatorDelete(
     await deleteInstalledAvds(names, options.sdkRoot, { runCommand })
 
     for (const name of names) {
-      console.log(`Deleted emulator: ${name}`)
+      log(`Deleted emulator: ${name}`)
     }
 
     showOutro('Done')

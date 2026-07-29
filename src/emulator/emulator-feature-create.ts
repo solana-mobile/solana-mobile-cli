@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { cancel, intro, outro } from '@clack/prompts'
+import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { resolveEmulatorProfile } from './data-access/avd-config.ts'
 import { createAvd, defaultPathExists, defaultWriteTextFile, getAvdDirectoryPath } from './data-access/create-avd.ts'
 import type {
@@ -20,6 +21,7 @@ interface RunEmulatorCreateDependencies
     InstallEmulatorSystemImageDependencies,
     StartEmulatorDependencies {
   cancel?: (message: string) => void
+  formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
   outro?: (message: string) => void
 }
@@ -29,9 +31,10 @@ export async function runEmulatorCreate(
   {
     architecture,
     cancel: showCancel = cancel,
+    formatCommand = formatCliCommand,
     getHomeDirectory = homedir,
     intro: showIntro = intro,
-    log,
+    log = console.log,
     outro: showOutro = outro,
     pathExists = defaultPathExists(),
     readDirectory = defaultReadDirectory,
@@ -106,13 +109,13 @@ export async function runEmulatorCreate(
     )
 
     if (!result.created) {
-      console.log(`Emulator already exists: ${result.name}`)
-      console.log(`To recreate, delete it first with: solana-mobile emulator delete ${result.name}`)
+      log(`Emulator already exists: ${result.name}`)
+      log(`To recreate, delete it first with: ${formatCommand(`emulator delete ${result.name}`)}`)
       showOutro('Done')
       return
     }
 
-    console.log(`Created emulator: ${result.name}`)
+    log(`Created emulator: ${result.name}`)
 
     if (options.start) {
       await startEmulator(
@@ -124,12 +127,12 @@ export async function runEmulatorCreate(
           startProcess,
         },
       )
-      console.log(`Started emulator: ${result.name}`)
+      log(`Started emulator: ${result.name}`)
       showOutro('Done')
       return
     }
 
-    console.log(`Start with: solana-mobile emulator start ${result.name}`)
+    log(`Start with: ${formatCommand(`emulator start ${result.name}`)}`)
     showOutro('Done')
   } catch (error) {
     showCancel(`${error}`)
