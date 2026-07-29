@@ -1,10 +1,9 @@
 import { homedir } from 'node:os'
-import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
+import { cancel, log as clackLog, intro, note, outro } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import type { EmulatorStartCommandOptions, StartEmulatorDependencies } from './data-access/emulator-types.ts'
 import { defaultReadDirectory, defaultReadTextFile, listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { defaultStartProcess, startEmulator } from './data-access/start-emulator.ts'
-import { NO_INSTALLED_EMULATORS_MESSAGE } from './ui/emulator-ui-messages.ts'
 import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectInstalledEmulatorName } from './ui/emulator-ui-select-installed-emulator-name.ts'
 
@@ -13,6 +12,7 @@ interface RunEmulatorStartDependencies extends PromptDependencies, StartEmulator
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
   log?: (message: string) => void
+  note?: (message: string, title?: string) => void
   outro?: (message: string) => void
 }
 
@@ -24,6 +24,7 @@ export async function runEmulatorStart(
     getHomeDirectory = homedir,
     intro: showIntro = intro,
     log = clackLog.message,
+    note: showNote = note,
     outro: showOutro = outro,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
@@ -40,8 +41,8 @@ export async function runEmulatorStart(
       const avds = await listInstalledAvds({ getHomeDirectory, readDirectory, readTextFile })
 
       if (avds.length === 0) {
-        log(NO_INSTALLED_EMULATORS_MESSAGE)
-        showOutro(`Create one with: ${formatCommand('emulator create')}`)
+        showNote(formatCommand('emulator create'), 'No Android emulators found')
+        showOutro('Done')
         return
       }
 

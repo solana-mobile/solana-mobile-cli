@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { cancel, log as clackLog, intro, note, outro, spinner } from '@clack/prompts'
+import { cancel, log as clackLog, intro, note, outro, taskLog } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { systemImagePackageToRelativeDirectory } from './data-access/avd-config.ts'
 import type {
@@ -49,7 +49,7 @@ interface RunEmulatorImagesDeleteDependencies
   log?: (message: string) => void
   note?: (message: string, title?: string) => void
   outro?: (message: string) => void
-  spinner?: () => EmulatorSpinner
+  taskLog?: typeof taskLog
 }
 
 export interface InstallEmulatorSystemImageDependencies
@@ -57,13 +57,7 @@ export interface InstallEmulatorSystemImageDependencies
     SystemImagePackageManagerDependencies {
   architecture?: string
   log?: (message: string) => void
-  spinner?: () => EmulatorSpinner
-}
-
-interface EmulatorSpinner {
-  clear(): void
-  error(message?: string): void
-  start(message?: string): void
+  taskLog?: typeof taskLog
 }
 
 interface RunEmulatorImagesInstallDependencies extends InstallEmulatorSystemImageDependencies {
@@ -125,7 +119,7 @@ export async function runEmulatorImagesDelete(
     runCommand = runExecutable,
     runInteractiveCommand,
     runMultiselect,
-    spinner: createSpinner = spinner,
+    taskLog: createTaskLog = taskLog,
   }: RunEmulatorImagesDeleteDependencies = {},
 ) {
   try {
@@ -180,14 +174,14 @@ export async function runEmulatorImagesDelete(
     const runSystemImageUninstall = options.verbose
       ? runInteractiveCommand
       : async (command: [string, ...string[]]) => {
-          const loading = createSpinner()
-          loading.start('Deleting Android system images')
+          const deleteLog = createTaskLog({ title: 'Deleting Android system images' })
 
           try {
-            await runCommand(command)
-            loading.clear()
+            const output = await runCommand(command)
+            if (output) deleteLog.message(output)
+            deleteLog.success('Deleted Android system images')
           } catch (error) {
-            loading.error('Failed to delete Android system images')
+            deleteLog.error(error instanceof Error ? error.message : String(error))
             throw error
           }
         }
@@ -239,7 +233,7 @@ export async function installEmulatorSystemImage(
     runCommand = runExecutable,
     runInteractiveCommand,
     runSelect,
-    spinner: createSpinner = spinner,
+    taskLog: createTaskLog = taskLog,
   }: InstallEmulatorSystemImageDependencies = {},
 ): Promise<string | undefined> {
   const sdkRoot = options.sdkRoot ?? resolveAndroidSdkRoot()
@@ -261,11 +255,25 @@ export async function installEmulatorSystemImage(
     return
   }
 
-  const availableSystemImages = await listAvailableSystemImages(sdkRoot, {
-    pathExists,
-    readDirectory,
-    runCommand,
-  })
+  const fetchLog = createTaskLog({ title: 'Fetching available system images' })
+  let availableSystemImages: string[]
+
+  try {
+    availableSystemImages = await listAvailableSystemImages(sdkRoot, {
+      pathExists,
+      readDirectory,
+      runCommand: async (command) => {
+        const output = await runCommand(command)
+        if (output) fetchLog.message(output)
+        return output
+      },
+    })
+    fetchLog.success('Fetched available system images')
+  } catch (error) {
+    fetchLog.error(error instanceof Error ? error.message : String(error))
+    throw error
+  }
+
   const compatibleSystemImages = filterCompatibleSystemImages(availableSystemImages, architecture)
   const installableSystemImages = compatibleSystemImages.filter(
     (systemImage) => !installedSystemImages.includes(systemImage),
@@ -299,14 +307,14 @@ export async function installEmulatorSystemImage(
   const runSystemImageInstall = options.verbose
     ? runInteractiveCommand
     : async (command: [string, ...string[]]) => {
-        const loading = createSpinner()
-        loading.start('Installing Android system image')
+        const installLog = createTaskLog({ title: 'Installing Android system image' })
 
         try {
-          await runCommand(command)
-          loading.clear()
+          const output = await runCommand(command)
+          if (output) installLog.message(output)
+          installLog.success('Installed Android system image')
         } catch (error) {
-          loading.error('Failed to install Android system image')
+          installLog.error(error instanceof Error ? error.message : String(error))
           throw error
         }
       }
@@ -334,5 +342,5 @@ function renderNoInstalledSystemImages(
   formatCommand: typeof formatCliCommand,
 ) {
   showNote(formatCommand('emulator images install'), 'No Android system images installed')
-  showOutro('Run the command above to install a system image.')
+  showOutro('Done')
 }
