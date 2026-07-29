@@ -133,6 +133,7 @@ export function createApp({
     .command('delete [systemImages...]')
     .description('Delete installed Android system images')
     .option('--sdk-root <path>', 'Android SDK root')
+    .option('-v, --verbose', 'Verbose output')
     .action(
       async (systemImages: string[] | undefined, options: Omit<EmulatorImagesDeleteCommandOptions, 'systemImages'>) => {
         await runEmulatorImagesDeleteCommand({ ...options, systemImages: systemImages ?? [] })

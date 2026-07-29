@@ -147,7 +147,7 @@ export async function runCreate(
 
     if (options.verbose) {
       log.warn('Verbose output enabled')
-      console.warn(createArgs)
+      log.message(JSON.stringify(createArgs, undefined, 2))
     }
 
     const instructions = await createSolanaDapp.createApp(createArgs)

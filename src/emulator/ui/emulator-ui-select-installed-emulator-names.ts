@@ -7,11 +7,6 @@ export async function selectInstalledEmulatorNames(
   avds: readonly InstalledAvd[],
   runMultiselect: MultiSelectPrompt = multiselect as MultiSelectPrompt,
 ): Promise<string[] | undefined> {
-  if (avds.length === 0) {
-    console.log('No Android emulators found.')
-    return undefined
-  }
-
   const selected = await runMultiselect({
     message: 'Select emulators to delete',
     options: avds.map(createInstalledEmulatorOption),

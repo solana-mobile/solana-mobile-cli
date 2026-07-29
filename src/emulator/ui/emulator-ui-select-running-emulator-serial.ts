@@ -6,11 +6,6 @@ export async function selectRunningEmulatorSerial(
   runningEmulators: readonly RunningEmulator[],
   runSelect: SelectPrompt = select as SelectPrompt,
 ): Promise<string | undefined> {
-  if (runningEmulators.length === 0) {
-    console.log('No running Android emulators found.')
-    return undefined
-  }
-
   const selected = await runSelect({
     message: 'Select a running emulator to stop',
     options: runningEmulators.map(createRunningEmulatorOption),

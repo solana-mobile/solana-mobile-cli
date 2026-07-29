@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
-import { cancel, intro, note, outro, spinner } from '@clack/prompts'
+import { cancel, log as clackLog, intro, note, outro, spinner } from '@clack/prompts'
+import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { systemImagePackageToRelativeDirectory } from './data-access/avd-config.ts'
 import type {
   DirectoryReader,
@@ -29,6 +30,7 @@ import { selectSystemImage } from './ui/emulator-ui-select-system-image.ts'
 
 interface RunEmulatorImagesDependencies {
   cancel?: (message: string) => void
+  formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
   log?: (message: string) => void
   note?: (message: string, title?: string) => void
@@ -42,10 +44,12 @@ interface RunEmulatorImagesDeleteDependencies
     PromptDependencies,
     SystemImagePackageManagerDependencies {
   cancel?: (message: string) => void
+  formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
   log?: (message: string) => void
   note?: (message: string, title?: string) => void
   outro?: (message: string) => void
+  spinner?: () => EmulatorSpinner
 }
 
 export interface InstallEmulatorSystemImageDependencies
@@ -53,10 +57,10 @@ export interface InstallEmulatorSystemImageDependencies
     SystemImagePackageManagerDependencies {
   architecture?: string
   log?: (message: string) => void
-  spinner?: () => EmulatorInstallSpinner
+  spinner?: () => EmulatorSpinner
 }
 
-interface EmulatorInstallSpinner {
+interface EmulatorSpinner {
   clear(): void
   error(message?: string): void
   start(message?: string): void
@@ -72,8 +76,9 @@ export async function runEmulatorImages(
   options: EmulatorImagesCommandOptions = {},
   {
     cancel: showCancel = cancel,
+    formatCommand = formatCliCommand,
     intro: showIntro = intro,
-    log = console.log,
+    log = clackLog.message,
     note: showNote = note,
     outro: showOutro = outro,
     pathExists,
@@ -89,7 +94,7 @@ export async function runEmulatorImages(
     })
 
     if (systemImages.length === 0) {
-      renderNoInstalledSystemImages(showNote, showOutro)
+      renderNoInstalledSystemImages(showNote, showOutro, formatCommand)
       return
     }
 
@@ -108,16 +113,19 @@ export async function runEmulatorImagesDelete(
   options: EmulatorImagesDeleteCommandOptions = {},
   {
     cancel: showCancel = cancel,
+    formatCommand = formatCliCommand,
     getHomeDirectory = homedir,
     intro: showIntro = intro,
-    log = console.log,
+    log = clackLog.message,
     note: showNote = note,
     outro: showOutro = outro,
     pathExists,
     readDirectory,
     readTextFile,
+    runCommand = runExecutable,
     runInteractiveCommand,
     runMultiselect,
+    spinner: createSpinner = spinner,
   }: RunEmulatorImagesDeleteDependencies = {},
 ) {
   try {
@@ -127,7 +135,7 @@ export async function runEmulatorImagesDelete(
     const installedSystemImages = await listInstalledSystemImages(sdkRoot, { pathExists, readDirectory })
 
     if (installedSystemImages.length === 0) {
-      renderNoInstalledSystemImages(showNote, showOutro)
+      renderNoInstalledSystemImages(showNote, showOutro, formatCommand)
       return
     }
 
@@ -139,7 +147,12 @@ export async function runEmulatorImagesDelete(
         ? requestedSystemImages.map((systemImage) => resolveInstalledSystemImage(systemImage, installedSystemImages))
         : await selectInstalledSystemImages(installedSystemImages, runMultiselect)
 
-    if (!systemImages || systemImages.length === 0) {
+    if (!systemImages) {
+      return
+    }
+
+    if (systemImages.length === 0) {
+      showOutro('Done')
       return
     }
 
@@ -164,10 +177,25 @@ export async function runEmulatorImagesDelete(
       )
     }
 
+    const runSystemImageUninstall = options.verbose
+      ? runInteractiveCommand
+      : async (command: [string, ...string[]]) => {
+          const loading = createSpinner()
+          loading.start('Deleting Android system images')
+
+          try {
+            await runCommand(command)
+            loading.clear()
+          } catch (error) {
+            loading.error('Failed to delete Android system images')
+            throw error
+          }
+        }
+
     await uninstallSystemImages(systemImages, sdkRoot, {
       pathExists,
       readDirectory,
-      runInteractiveCommand,
+      runInteractiveCommand: runSystemImageUninstall,
     })
 
     for (const systemImage of systemImages) {
@@ -192,7 +220,7 @@ export async function runEmulatorImagesInstall(
 
     const systemImage = await installEmulatorSystemImage(options, dependencies)
 
-    if (systemImage) {
+    if (systemImage || !process.exitCode) {
       showOutro('Done')
     }
   } catch (error) {
@@ -205,7 +233,7 @@ export async function installEmulatorSystemImage(
   options: EmulatorImagesInstallCommandOptions = {},
   {
     architecture = process.arch,
-    log = console.log,
+    log = clackLog.message,
     pathExists,
     readDirectory,
     runCommand = runExecutable,
@@ -303,7 +331,8 @@ function formatAvailableSystemImages(systemImages: readonly string[]): string {
 function renderNoInstalledSystemImages(
   showNote: (message: string, title?: string) => void,
   showOutro: (message: string) => void,
+  formatCommand: typeof formatCliCommand,
 ) {
-  showNote('solana-mobile emulator images install', 'No Android system images installed')
+  showNote(formatCommand('emulator images install'), 'No Android system images installed')
   showOutro('Run the command above to install a system image.')
 }

@@ -1,13 +1,16 @@
-import { cancel, intro, outro } from '@clack/prompts'
+import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
+import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import type { EmulatorStopCommandOptions, StopEmulatorDependencies } from './data-access/emulator-types.ts'
 import { listRunningEmulators } from './data-access/list-running-emulators.ts'
 import { runExecutable } from './data-access/run-executable.ts'
 import { stopEmulator } from './data-access/stop-emulator.ts'
+import { NO_RUNNING_EMULATORS_MESSAGE } from './ui/emulator-ui-messages.ts'
 import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectRunningEmulatorSerial } from './ui/emulator-ui-select-running-emulator-serial.ts'
 
 interface RunEmulatorStopDependencies extends PromptDependencies, StopEmulatorDependencies {
   cancel?: (message: string) => void
+  formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
   log?: (message: string) => void
   outro?: (message: string) => void
@@ -17,8 +20,9 @@ export async function runEmulatorStop(
   options: EmulatorStopCommandOptions = {},
   {
     cancel: showCancel = cancel,
+    formatCommand = formatCliCommand,
     intro: showIntro = intro,
-    log = console.log,
+    log = clackLog.message,
     outro: showOutro = outro,
     runCommand = runExecutable,
     runSelect,
@@ -27,11 +31,22 @@ export async function runEmulatorStop(
   try {
     showIntro('solana-mobile emulator stop')
 
-    const nameOrSerial =
-      options.nameOrSerial ?? (await selectRunningEmulatorSerial(await listRunningEmulators({ runCommand }), runSelect))
+    let nameOrSerial = options.nameOrSerial
 
     if (!nameOrSerial) {
-      return
+      const runningEmulators = await listRunningEmulators({ runCommand })
+
+      if (runningEmulators.length === 0) {
+        log(NO_RUNNING_EMULATORS_MESSAGE)
+        showOutro(`Start one with: ${formatCommand('emulator start')}`)
+        return
+      }
+
+      nameOrSerial = await selectRunningEmulatorSerial(runningEmulators, runSelect)
+
+      if (!nameOrSerial) {
+        return
+      }
     }
 
     const stopped = await stopEmulator(nameOrSerial, { runCommand })
