@@ -172,4 +172,4 @@ Unit tests (`bun test`) run without any external dependencies.
 
 ## License
 
-MIT – see [LICENSE](./LICENSE).
+Apache-2.0 – see [LICENSE](./LICENSE).
