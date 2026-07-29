@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
+import { cancel, intro, note, outro, tasks } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { deleteInstalledAvds } from './data-access/delete-installed-avds.ts'
 import type {
@@ -10,7 +10,6 @@ import type {
 import { defaultReadDirectory, defaultReadTextFile, listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { listRunningEmulators } from './data-access/list-running-emulators.ts'
 import { runExecutable } from './data-access/run-executable.ts'
-import { NO_INSTALLED_EMULATORS_MESSAGE } from './ui/emulator-ui-messages.ts'
 import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectInstalledEmulatorNames } from './ui/emulator-ui-select-installed-emulator-names.ts'
 
@@ -21,8 +20,9 @@ interface RunEmulatorDeleteDependencies
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
-  log?: (message: string) => void
+  note?: (message: string, title?: string) => void
   outro?: (message: string) => void
+  tasks?: typeof tasks
 }
 
 export async function runEmulatorDelete(
@@ -32,12 +32,13 @@ export async function runEmulatorDelete(
     formatCommand = formatCliCommand,
     getHomeDirectory = homedir,
     intro: showIntro = intro,
-    log = clackLog.message,
+    note: showNote = note,
     outro: showOutro = outro,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
     runCommand = runExecutable,
     runMultiselect,
+    tasks: runTasks = tasks,
   }: RunEmulatorDeleteDependencies = {},
 ) {
   try {
@@ -49,8 +50,8 @@ export async function runEmulatorDelete(
       const avds = await listInstalledAvds({ getHomeDirectory, readDirectory, readTextFile })
 
       if (avds.length === 0) {
-        log(NO_INSTALLED_EMULATORS_MESSAGE)
-        showOutro(`Create one with: ${formatCommand('emulator create')}`)
+        showNote(formatCommand('emulator create'), 'No Android emulators found')
+        showOutro('Done')
         return
       }
 
@@ -76,11 +77,15 @@ export async function runEmulatorDelete(
       )
     }
 
-    await deleteInstalledAvds(names, options.sdkRoot, { runCommand })
-
-    for (const name of names) {
-      log(`Deleted emulator: ${name}`)
-    }
+    await runTasks(
+      names.map((name) => ({
+        task: async () => {
+          await deleteInstalledAvds([name], options.sdkRoot, { runCommand })
+          return `Deleted emulator: ${name}`
+        },
+        title: `Deleting ${name}`,
+      })),
+    )
 
     showOutro('Done')
   } catch (error) {

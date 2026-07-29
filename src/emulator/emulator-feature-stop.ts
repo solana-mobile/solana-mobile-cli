@@ -1,10 +1,9 @@
-import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
+import { cancel, log as clackLog, intro, note, outro } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import type { EmulatorStopCommandOptions, StopEmulatorDependencies } from './data-access/emulator-types.ts'
 import { listRunningEmulators } from './data-access/list-running-emulators.ts'
 import { runExecutable } from './data-access/run-executable.ts'
 import { stopEmulator } from './data-access/stop-emulator.ts'
-import { NO_RUNNING_EMULATORS_MESSAGE } from './ui/emulator-ui-messages.ts'
 import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectRunningEmulatorSerial } from './ui/emulator-ui-select-running-emulator-serial.ts'
 
@@ -13,6 +12,7 @@ interface RunEmulatorStopDependencies extends PromptDependencies, StopEmulatorDe
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
   log?: (message: string) => void
+  note?: (message: string, title?: string) => void
   outro?: (message: string) => void
 }
 
@@ -23,6 +23,7 @@ export async function runEmulatorStop(
     formatCommand = formatCliCommand,
     intro: showIntro = intro,
     log = clackLog.message,
+    note: showNote = note,
     outro: showOutro = outro,
     runCommand = runExecutable,
     runSelect,
@@ -37,8 +38,8 @@ export async function runEmulatorStop(
       const runningEmulators = await listRunningEmulators({ runCommand })
 
       if (runningEmulators.length === 0) {
-        log(NO_RUNNING_EMULATORS_MESSAGE)
-        showOutro(`Start one with: ${formatCommand('emulator start')}`)
+        showNote(formatCommand('emulator start'), 'No running Android emulators found')
+        showOutro('Done')
         return
       }
 

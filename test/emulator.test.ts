@@ -280,7 +280,7 @@ describe('emulator', () => {
           title: 'No Android system images installed',
         },
       ])
-      expect(outros).toEqual(['Run the command above to install a system image.'])
+      expect(outros).toEqual(['Done'])
     } finally {
       await rm(sdkRoot, { force: true, recursive: true })
     }
@@ -325,10 +325,11 @@ describe('emulator', () => {
           runMultiselect: async () => {
             throw new Error('Unexpected system image prompt.')
           },
-          spinner: () => ({
-            clear: () => {},
+          taskLog: () => ({
             error: () => {},
-            start: () => {},
+            group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+            message: () => {},
+            success: () => {},
           }),
         },
       )
@@ -373,10 +374,11 @@ describe('emulator', () => {
             commands.push(cmd)
             return ''
           },
-          spinner: () => ({
-            clear: () => {},
+          taskLog: () => ({
             error: () => {},
-            start: () => {},
+            group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+            message: () => {},
+            success: () => {},
           }),
         },
       )
@@ -515,10 +517,11 @@ describe('emulator', () => {
             expect(options.required).toBe(false)
             return [systemImages[1] as string]
           },
-          spinner: () => ({
-            clear: () => {},
+          taskLog: () => ({
             error: () => {},
-            start: () => {},
+            group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+            message: () => {},
+            success: () => {},
           }),
         },
       )
@@ -556,8 +559,8 @@ describe('emulator', () => {
           runInteractiveCommand: async (cmd) => {
             commands.push(cmd)
           },
-          spinner: () => {
-            throw new Error('Unexpected uninstall spinner.')
+          taskLog: () => {
+            throw new Error('Unexpected uninstall taskLog.')
           },
         },
       )
@@ -633,7 +636,7 @@ Available Packages:
     const intros: string[] = []
     const logs: string[] = []
     const selectedSystemImage = 'system-images;android-37.0-ext2;google_apis_playstore;arm64-v8a'
-    const spinnerEvents: string[] = []
+    const taskLogEvents: string[] = []
 
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
@@ -680,11 +683,15 @@ Available packages:
             ])
             return selectedSystemImage
           },
-          spinner: () => ({
-            clear: () => spinnerEvents.push('clear'),
-            error: (message) => spinnerEvents.push(`error:${message}`),
-            start: (message) => spinnerEvents.push(`start:${message}`),
-          }),
+          taskLog: ({ title }) => {
+            taskLogEvents.push(`start:${title}`)
+            return {
+              error: (message) => taskLogEvents.push(`error:${message}`),
+              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+              message: (message) => taskLogEvents.push(`message:${message.length > 0}`),
+              success: (message) => taskLogEvents.push(`success:${message}`),
+            }
+          },
         },
       )
 
@@ -694,7 +701,13 @@ Available packages:
       ])
       expect(intros).toEqual(['solana-mobile emulator images install'])
       expect(logs).toEqual([`Installed system image: ${selectedSystemImage}`])
-      expect(spinnerEvents).toEqual(['start:Installing Android system image', 'clear'])
+      expect(taskLogEvents).toEqual([
+        'start:Fetching available system images',
+        'message:true',
+        'success:Fetched available system images',
+        'start:Installing Android system image',
+        'success:Installed Android system image',
+      ])
     } finally {
       await rm(sdkRoot, { force: true, recursive: true })
     }
@@ -834,8 +847,17 @@ Available packages:
           runSelect: async () => {
             throw new Error('Unexpected system image prompt.')
           },
-          spinner: () => {
-            throw new Error('Unexpected install spinner.')
+          taskLog: ({ title }) => {
+            if (title !== 'Fetching available system images') {
+              throw new Error('Unexpected install taskLog.')
+            }
+
+            return {
+              error: () => {},
+              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+              message: () => {},
+              success: () => {},
+            }
           },
         },
       )
@@ -1084,7 +1106,7 @@ Available packages:
     const commands: Array<{ cmd: [string, ...string[]]; stdin?: string }> = []
     const installs: Array<[string, ...string[]]> = []
     const intros: string[] = []
-    const spinnerEvents: string[] = []
+    const taskLogEvents: string[] = []
     const systemImage = 'system-images;android-37.0;google_apis_playstore;arm64-v8a'
 
     try {
@@ -1143,11 +1165,15 @@ Available packages:
             ])
             return systemImage
           },
-          spinner: () => ({
-            clear: () => spinnerEvents.push('clear'),
-            error: (message) => spinnerEvents.push(`error:${message}`),
-            start: (message) => spinnerEvents.push(`start:${message}`),
-          }),
+          taskLog: ({ title }) => {
+            taskLogEvents.push(`start:${title}`)
+            return {
+              error: (message) => taskLogEvents.push(`error:${message}`),
+              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+              message: (message) => taskLogEvents.push(`message:${message.length > 0}`),
+              success: (message) => taskLogEvents.push(`success:${message}`),
+            }
+          },
         },
       )
 
@@ -1184,7 +1210,13 @@ Available packages:
         [android, 'sdk', 'install', 'system-images/android-37.0/google_apis_playstore/arm64-v8a'],
       ])
       expect(intros).toEqual(['solana-mobile emulator create'])
-      expect(spinnerEvents).toEqual(['start:Installing Android system image', 'clear'])
+      expect(taskLogEvents).toEqual([
+        'start:Fetching available system images',
+        'message:true',
+        'success:Fetched available system images',
+        'start:Installing Android system image',
+        'success:Installed Android system image',
+      ])
     } finally {
       await rm(rootDirectory, { force: true, recursive: true })
     }
@@ -1232,8 +1264,17 @@ Available packages:
             await installSystemImage(sdkRoot, systemImage)
           },
           runSelect: async () => systemImage,
-          spinner: () => {
-            throw new Error('Unexpected install spinner.')
+          taskLog: ({ title }) => {
+            if (title !== 'Fetching available system images') {
+              throw new Error('Unexpected install taskLog.')
+            }
+
+            return {
+              error: () => {},
+              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+              message: () => {},
+              success: () => {},
+            }
           },
         },
       )
@@ -1252,6 +1293,7 @@ Available packages:
     const sdkRoot = join(rootDirectory, 'sdk')
     const systemImage = 'system-images;android-36;google_apis_playstore;arm64-v8a'
     const commands: Array<[string, ...string[]]> = []
+    const taskTitles: string[] = []
 
     try {
       await installAndroidCommandLineTool(sdkRoot, 'avdmanager')
@@ -1278,12 +1320,20 @@ Available packages:
           runText: async () => {
             throw new Error('Unexpected emulator name prompt.')
           },
+          tasks: async (list) => {
+            for (const task of list) {
+              taskTitles.push(task.title)
+              const result = await task.task(() => {})
+              expect(result).toBe('Created emulator: named_phone')
+            }
+          },
         },
       )
 
       expect(commands.map((command) => command.join(' '))).toContain(
         `${join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager')} create avd --abi arm64-v8a --device pixel_9_pro_xl --force --name named_phone --package ${systemImage} --sdcard 512M`,
       )
+      expect(taskTitles).toEqual(['Creating emulator: named_phone'])
     } finally {
       await rm(rootDirectory, { force: true, recursive: true })
     }
@@ -1351,6 +1401,7 @@ Available packages:
   test('selects installed emulators before deleting when names are omitted', async () => {
     const homeDirectory = await createTemporaryDirectory('solana-mobile-avd-delete-select-')
     const commands: Array<[string, ...string[]]> = []
+    const taskTitles: string[] = []
 
     try {
       await mkdir(join(homeDirectory, '.android', 'avd', 'Alpha.avd'), { recursive: true })
@@ -1375,6 +1426,13 @@ Available packages:
             expect(options.options.map((option) => option.value)).toEqual(['Alpha', 'Beta'])
             return ['Beta']
           },
+          tasks: async (list) => {
+            for (const task of list) {
+              taskTitles.push(task.title)
+              const result = await task.task(() => {})
+              expect(result).toBe('Deleted emulator: Beta')
+            }
+          },
         },
       )
 
@@ -1382,6 +1440,7 @@ Available packages:
         ['adb', 'devices'],
         ['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Beta'],
       ])
+      expect(taskTitles).toEqual(['Deleting Beta'])
     } finally {
       await rm(homeDirectory, { force: true, recursive: true })
     }

@@ -1,10 +1,11 @@
 import { homedir } from 'node:os'
-import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
+import { cancel, log as clackLog, intro, note, outro, tasks } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { resolveEmulatorProfile } from './data-access/avd-config.ts'
 import { createAvd, defaultPathExists, defaultWriteTextFile, getAvdDirectoryPath } from './data-access/create-avd.ts'
 import type {
   CreateAvdDependencies,
+  CreateAvdResult,
   EmulatorCreateCommandOptions,
   StartEmulatorDependencies,
 } from './data-access/emulator-types.ts'
@@ -23,7 +24,9 @@ interface RunEmulatorCreateDependencies
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
+  note?: (message: string, title?: string) => void
   outro?: (message: string) => void
+  tasks?: typeof tasks
 }
 
 export async function runEmulatorCreate(
@@ -35,6 +38,7 @@ export async function runEmulatorCreate(
     getHomeDirectory = homedir,
     intro: showIntro = intro,
     log = clackLog.message,
+    note: showNote = note,
     outro: showOutro = outro,
     pathExists = defaultPathExists(),
     readDirectory = defaultReadDirectory,
@@ -43,8 +47,9 @@ export async function runEmulatorCreate(
     runInteractiveCommand,
     runSelect,
     runText,
-    spinner: createSpinner,
     startProcess = defaultStartProcess,
+    taskLog,
+    tasks: runTasks = tasks,
     writeTextFile = defaultWriteTextFile,
   }: RunEmulatorCreateDependencies = {},
 ) {
@@ -81,7 +86,7 @@ export async function runEmulatorCreate(
             runCommand,
             runInteractiveCommand,
             runSelect,
-            spinner: createSpinner,
+            taskLog,
           },
         )
 
@@ -94,31 +99,39 @@ export async function runEmulatorCreate(
       }
     }
 
-    const result = await createAvd(
+    let result!: CreateAvdResult
+
+    await runTasks([
       {
-        ...options,
-        name,
-        sdkRoot,
-        systemImage,
+        task: async () => {
+          result = await createAvd(
+            {
+              ...options,
+              name,
+              sdkRoot,
+              systemImage,
+            },
+            {
+              getHomeDirectory,
+              pathExists,
+              readDirectory,
+              readTextFile,
+              runCommand,
+              writeTextFile,
+            },
+          )
+
+          return result.created ? `Created emulator: ${result.name}` : `Emulator already exists: ${result.name}`
+        },
+        title: `Creating emulator: ${name}`,
       },
-      {
-        getHomeDirectory,
-        pathExists,
-        readDirectory,
-        readTextFile,
-        runCommand,
-        writeTextFile,
-      },
-    )
+    ])
 
     if (!result.created) {
-      log(`Emulator already exists: ${result.name}`)
-      log(`To recreate, delete it first with: ${formatCommand(`emulator delete ${result.name}`)}`)
+      showNote(formatCommand(`emulator delete ${result.name}`), 'Delete it first to recreate')
       showOutro('Done')
       return
     }
-
-    log(`Created emulator: ${result.name}`)
 
     if (options.start) {
       await startEmulator(
@@ -135,7 +148,7 @@ export async function runEmulatorCreate(
       return
     }
 
-    log(`Start with: ${formatCommand(`emulator start ${result.name}`)}`)
+    showNote(formatCommand(`emulator start ${result.name}`), 'Start the emulator')
     showOutro('Done')
   } catch (error) {
     showCancel(`${error}`)
