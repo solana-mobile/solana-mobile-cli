@@ -9,6 +9,7 @@ import { selectRunningEmulatorSerial } from './ui/emulator-ui-select-running-emu
 interface RunEmulatorStopDependencies extends PromptDependencies, StopEmulatorDependencies {
   cancel?: (message: string) => void
   intro?: (message: string) => void
+  log?: (message: string) => void
   outro?: (message: string) => void
 }
 
@@ -17,6 +18,7 @@ export async function runEmulatorStop(
   {
     cancel: showCancel = cancel,
     intro: showIntro = intro,
+    log = console.log,
     outro: showOutro = outro,
     runCommand = runExecutable,
     runSelect,
@@ -34,7 +36,7 @@ export async function runEmulatorStop(
 
     const stopped = await stopEmulator(nameOrSerial, { runCommand })
 
-    console.log(`Stopped emulator: ${stopped.name} (${stopped.serial})`)
+    log(`Stopped emulator: ${stopped.name} (${stopped.serial})`)
     showOutro('Done')
   } catch (error) {
     showCancel(`${error}`)

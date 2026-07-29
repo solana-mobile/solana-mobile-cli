@@ -9,6 +9,7 @@ import { selectInstalledEmulatorName } from './ui/emulator-ui-select-installed-e
 interface RunEmulatorStartDependencies extends PromptDependencies, StartEmulatorDependencies {
   cancel?: (message: string) => void
   intro?: (message: string) => void
+  log?: (message: string) => void
   outro?: (message: string) => void
 }
 
@@ -18,6 +19,7 @@ export async function runEmulatorStart(
     cancel: showCancel = cancel,
     getHomeDirectory = homedir,
     intro: showIntro = intro,
+    log = console.log,
     outro: showOutro = outro,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
@@ -52,7 +54,7 @@ export async function runEmulatorStart(
         startProcess,
       },
     )
-    console.log(`Started emulator: ${name}`)
+    log(`Started emulator: ${name}`)
     showOutro('Done')
   } catch (error) {
     showCancel(`${error}`)
