@@ -636,7 +636,7 @@ Available Packages:
     const intros: string[] = []
     const logs: string[] = []
     const selectedSystemImage = 'system-images;android-37.0-ext2;google_apis_playstore;arm64-v8a'
-    const taskLogEvents: string[] = []
+    const spinnerEvents: string[] = []
 
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
@@ -683,14 +683,17 @@ Available packages:
             ])
             return selectedSystemImage
           },
-          taskLog: ({ title }) => {
-            taskLogEvents.push(`start:${title}`)
-            return {
-              error: (message) => taskLogEvents.push(`error:${message}`),
-              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
-              message: (message) => taskLogEvents.push(`message:${message.length > 0}`),
-              success: (message) => taskLogEvents.push(`success:${message}`),
-            }
+          spinner: () => ({
+            cancel: (message) => spinnerEvents.push(`cancel:${message}`),
+            clear: () => {},
+            error: (message) => spinnerEvents.push(`error:${message}`),
+            isCancelled: false,
+            message: () => {},
+            start: (message) => spinnerEvents.push(`start:${message}`),
+            stop: (message) => spinnerEvents.push(`stop:${message}`),
+          }),
+          taskLog: () => {
+            throw new Error('Unexpected taskLog in non-verbose mode.')
           },
         },
       )
@@ -701,11 +704,11 @@ Available packages:
       ])
       expect(intros).toEqual(['solana-mobile emulator images install'])
       expect(logs).toEqual([`Installed system image: ${selectedSystemImage}`])
-      expect(taskLogEvents).toEqual([
+      expect(spinnerEvents).toEqual([
         'start:Fetching available system images',
-        'success:Fetched available system images',
+        'stop:Fetched available system images',
         'start:Installing Android system image',
-        'success:Installed Android system image',
+        'stop:Installed Android system image',
       ])
     } finally {
       await rm(sdkRoot, { force: true, recursive: true })
@@ -1105,7 +1108,7 @@ Available packages:
     const commands: Array<{ cmd: [string, ...string[]]; stdin?: string }> = []
     const installs: Array<[string, ...string[]]> = []
     const intros: string[] = []
-    const taskLogEvents: string[] = []
+    const spinnerEvents: string[] = []
     const systemImage = 'system-images;android-37.0;google_apis_playstore;arm64-v8a'
 
     try {
@@ -1164,14 +1167,17 @@ Available packages:
             ])
             return systemImage
           },
-          taskLog: ({ title }) => {
-            taskLogEvents.push(`start:${title}`)
-            return {
-              error: (message) => taskLogEvents.push(`error:${message}`),
-              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
-              message: (message) => taskLogEvents.push(`message:${message.length > 0}`),
-              success: (message) => taskLogEvents.push(`success:${message}`),
-            }
+          spinner: () => ({
+            cancel: (message) => spinnerEvents.push(`cancel:${message}`),
+            clear: () => {},
+            error: (message) => spinnerEvents.push(`error:${message}`),
+            isCancelled: false,
+            message: () => {},
+            start: (message) => spinnerEvents.push(`start:${message}`),
+            stop: (message) => spinnerEvents.push(`stop:${message}`),
+          }),
+          taskLog: () => {
+            throw new Error('Unexpected taskLog in non-verbose mode.')
           },
         },
       )
@@ -1209,11 +1215,11 @@ Available packages:
         [android, 'sdk', 'install', 'system-images/android-37.0/google_apis_playstore/arm64-v8a'],
       ])
       expect(intros).toEqual(['solana-mobile emulator create'])
-      expect(taskLogEvents).toEqual([
+      expect(spinnerEvents).toEqual([
         'start:Fetching available system images',
-        'success:Fetched available system images',
+        'stop:Fetched available system images',
         'start:Installing Android system image',
-        'success:Installed Android system image',
+        'stop:Installed Android system image',
       ])
     } finally {
       await rm(rootDirectory, { force: true, recursive: true })

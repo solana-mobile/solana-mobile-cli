@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { cancel, log as clackLog, intro, note, outro, taskLog } from '@clack/prompts'
+import { cancel, log as clackLog, intro, note, outro, spinner, taskLog } from '@clack/prompts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { systemImagePackageToRelativeDirectory } from './data-access/avd-config.ts'
 import type {
@@ -57,6 +57,7 @@ export interface InstallEmulatorSystemImageDependencies
     SystemImagePackageManagerDependencies {
   architecture?: string
   log?: (message: string) => void
+  spinner?: typeof spinner
   taskLog?: typeof taskLog
 }
 
@@ -233,6 +234,7 @@ export async function installEmulatorSystemImage(
     runCommand = runExecutable,
     runInteractiveCommand,
     runSelect,
+    spinner: createSpinner = spinner,
     taskLog: createTaskLog = taskLog,
   }: InstallEmulatorSystemImageDependencies = {},
 ): Promise<string | undefined> {
@@ -255,23 +257,37 @@ export async function installEmulatorSystemImage(
     return
   }
 
-  const fetchLog = createTaskLog({ title: 'Fetching available system images' })
   let availableSystemImages: string[]
 
-  try {
-    availableSystemImages = await listAvailableSystemImages(sdkRoot, {
-      pathExists,
-      readDirectory,
-      runCommand: async (command) => {
-        const output = await runCommand(command)
-        if (output && options.verbose) fetchLog.message(output)
-        return output
-      },
-    })
-    fetchLog.success('Fetched available system images')
-  } catch (error) {
-    fetchLog.error(error instanceof Error ? error.message : String(error))
-    throw error
+  if (options.verbose) {
+    const fetchLog = createTaskLog({ title: 'Fetching available system images' })
+
+    try {
+      availableSystemImages = await listAvailableSystemImages(sdkRoot, {
+        pathExists,
+        readDirectory,
+        runCommand: async (command) => {
+          const output = await runCommand(command)
+          if (output) fetchLog.message(output)
+          return output
+        },
+      })
+      fetchLog.success('Fetched available system images')
+    } catch (error) {
+      fetchLog.error(error instanceof Error ? error.message : String(error))
+      throw error
+    }
+  } else {
+    const fetchSpinner = createSpinner()
+    fetchSpinner.start('Fetching available system images')
+
+    try {
+      availableSystemImages = await listAvailableSystemImages(sdkRoot, { pathExists, readDirectory, runCommand })
+      fetchSpinner.stop('Fetched available system images')
+    } catch (error) {
+      fetchSpinner.error(error instanceof Error ? error.message : String(error))
+      throw error
+    }
   }
 
   const compatibleSystemImages = filterCompatibleSystemImages(availableSystemImages, architecture)
@@ -307,14 +323,14 @@ export async function installEmulatorSystemImage(
   const runSystemImageInstall = options.verbose
     ? runInteractiveCommand
     : async (command: [string, ...string[]]) => {
-        const installLog = createTaskLog({ title: 'Installing Android system image' })
+        const installSpinner = createSpinner()
+        installSpinner.start('Installing Android system image')
 
         try {
-          const output = await runCommand(command)
-          if (output) installLog.message(output)
-          installLog.success('Installed Android system image')
+          await runCommand(command)
+          installSpinner.stop('Installed Android system image')
         } catch (error) {
-          installLog.error(error instanceof Error ? error.message : String(error))
+          installSpinner.error(error instanceof Error ? error.message : String(error))
           throw error
         }
       }
