@@ -703,7 +703,6 @@ Available packages:
       expect(logs).toEqual([`Installed system image: ${selectedSystemImage}`])
       expect(taskLogEvents).toEqual([
         'start:Fetching available system images',
-        'message:true',
         'success:Fetched available system images',
         'start:Installing Android system image',
         'success:Installed Android system image',
@@ -1212,7 +1211,6 @@ Available packages:
       expect(intros).toEqual(['solana-mobile emulator create'])
       expect(taskLogEvents).toEqual([
         'start:Fetching available system images',
-        'message:true',
         'success:Fetched available system images',
         'start:Installing Android system image',
         'success:Installed Android system image',

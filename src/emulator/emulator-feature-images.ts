@@ -264,7 +264,7 @@ export async function installEmulatorSystemImage(
       readDirectory,
       runCommand: async (command) => {
         const output = await runCommand(command)
-        if (output) fetchLog.message(output)
+        if (output && options.verbose) fetchLog.message(output)
         return output
       },
     })
