@@ -47,6 +47,7 @@ export async function runEmulatorCreate(
     runInteractiveCommand,
     runSelect,
     runText,
+    spinner,
     startProcess = defaultStartProcess,
     taskLog,
     tasks: runTasks = tasks,
@@ -86,6 +87,7 @@ export async function runEmulatorCreate(
             runCommand,
             runInteractiveCommand,
             runSelect,
+            spinner,
             taskLog,
           },
         )
