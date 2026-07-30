@@ -1,5 +1,12 @@
 # solana-mobile
 
+## 0.1.3
+
+### Patch Changes
+
+- 34d9ae7: Show an animated spinner while fetching available system images and installing a system image in non-verbose mode, instead of leaving the terminal static for the duration of the underlying `sdkmanager`/`android` command. `--verbose` still shows the full raw command output as before.
+- cad79e1: Only echo the raw `sdkmanager`/`android sdk list` output to the terminal in `--verbose` mode. Previously `emulator create` and `emulator images install` always dumped the full installed/available system-image package listing into the task log, even without `--verbose`.
+
 ## 0.1.2
 
 ### Patch Changes
