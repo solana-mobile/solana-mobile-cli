@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { cancel, intro, note, outro, tasks } from '@clack/prompts'
+import { runExecutable } from '../core/data-access/run-executable.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { deleteInstalledAvds } from './data-access/delete-installed-avds.ts'
 import type {
@@ -9,7 +10,6 @@ import type {
 } from './data-access/emulator-types.ts'
 import { defaultReadDirectory, defaultReadTextFile, listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { listRunningEmulators } from './data-access/list-running-emulators.ts'
-import { runExecutable } from './data-access/run-executable.ts'
 import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectInstalledEmulatorNames } from './ui/emulator-ui-select-installed-emulator-names.ts'
 

@@ -1,0 +1,41 @@
+name: Engines
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/engines.yml
+      - src/localnet/**
+      - test/integration/**
+
+  # Upstream images can break with no pull request attached, so check them on a schedule too.
+  schedule:
+    - cron: "0 6 * * *"
+
+  workflow_dispatch:
+
+jobs:
+  engines:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup
+
+      # Costs a second and no pull, so a deleted or renamed tag fails here with an obvious message
+      # instead of as a confusing boot timeout.
+      - name: Verify engine images are published
+        run: |
+          docker manifest inspect surfpool/surfpool:latest > /dev/null
+          docker manifest inspect beeman/solana-test-validator:latest > /dev/null
+
+      - name: Test engines
+        run: bun run test:integration

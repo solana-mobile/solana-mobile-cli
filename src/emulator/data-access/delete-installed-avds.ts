@@ -1,7 +1,7 @@
+import { runExecutable } from '../../core/data-access/run-executable.ts'
 import { getToolPaths } from './avd-config.ts'
 import type { DeleteInstalledAvdsDependencies } from './emulator-types.ts'
 import { resolveAndroidSdkRoot } from './resolve-android-sdk-root.ts'
-import { runExecutable } from './run-executable.ts'
 
 export async function deleteInstalledAvds(
   names: readonly string[],

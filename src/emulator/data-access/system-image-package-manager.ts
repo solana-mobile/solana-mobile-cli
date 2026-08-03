@@ -1,11 +1,11 @@
 import { join } from 'node:path'
+import { runExecutable, runInteractiveExecutable } from '../../core/data-access/run-executable.ts'
 import { parseSystemImagePackage, systemImagePackageToRelativeDirectory } from './avd-config.ts'
 import { defaultPathExists } from './create-avd.ts'
 import type { CommandRunner, DirectoryReader, InteractiveCommandRunner, PathChecker } from './emulator-types.ts'
 import { defaultReadDirectory } from './list-installed-avds.ts'
 import { sortSystemImagesNewestFirst } from './list-installed-system-images.ts'
 import { resolveAndroidCommandLineTool } from './resolve-android-command-line-tool.ts'
-import { runExecutable, runInteractiveExecutable } from './run-executable.ts'
 
 const GOOGLE_PLAY_SYSTEM_IMAGES_PATTERN = 'system-images/*/google_apis_playstore*/*'
 

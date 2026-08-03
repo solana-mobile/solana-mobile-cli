@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 import { basename } from 'node:path'
-import type { InteractiveCommandRunner, RunCommandOptions } from './emulator-types.ts'
+import type { InteractiveCommandRunner, RunCommandOptions } from './command-types.ts'
 
 export const runInteractiveExecutable: InteractiveCommandRunner = async (cmd) => {
   return new Promise((resolve, reject) => {
@@ -42,7 +42,9 @@ export async function runExecutable(cmd: [string, ...string[]], options: RunComm
         return
       }
 
-      resolve(stdoutText)
+      // Concatenated rather than interleaved: the streams are captured separately, so their relative
+      // order is not recoverable. Both are kept because either can carry the answer.
+      resolve(options.combineOutput ? [stdoutText, stderrText].filter(Boolean).join('') : stdoutText)
     })
 
     child.stdin.end(options.stdin)

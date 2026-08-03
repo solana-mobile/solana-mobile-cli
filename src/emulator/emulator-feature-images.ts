@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { cancel, log as clackLog, intro, note, outro, spinner, taskLog } from '@clack/prompts'
+import { runExecutable } from '../core/data-access/run-executable.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { systemImagePackageToRelativeDirectory } from './data-access/avd-config.ts'
 import type {
@@ -13,7 +14,6 @@ import type {
 import { listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { listInstalledSystemImages, resolveInstalledSystemImage } from './data-access/list-installed-system-images.ts'
 import { resolveAndroidSdkRoot } from './data-access/resolve-android-sdk-root.ts'
-import { runExecutable } from './data-access/run-executable.ts'
 import {
   filterCompatibleSystemImages,
   filterSystemImagesForPlatform,

@@ -1,6 +1,6 @@
+import { runExecutable } from '../../core/data-access/run-executable.ts'
 import type { RunningEmulator, StopEmulatorDependencies } from './emulator-types.ts'
 import { listRunningEmulators } from './list-running-emulators.ts'
-import { runExecutable } from './run-executable.ts'
 
 export async function stopEmulator(
   nameOrSerial: string,
