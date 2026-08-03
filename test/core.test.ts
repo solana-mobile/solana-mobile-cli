@@ -6,7 +6,7 @@ import { readPackageMetadata } from '../src/core/data-access/package-metadata.ts
 import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
 import { readPackageString } from '../src/core/util/read-package-string.ts'
 import type { CreateCommandOptions, CreateSolanaDappApi } from '../src/create/create-feature-index.ts'
-import { runCreate } from '../src/create/create-feature-index.ts'
+import { MINIMAL_TEMPLATE_NAME, runCreate } from '../src/create/create-feature-index.ts'
 import type {
   EmulatorCreateCommandOptions,
   EmulatorDeleteCommandOptions,
@@ -25,10 +25,17 @@ const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.me
 }
 const template: TemplateJsonTemplate = {
   description: 'A Solana Mobile template',
-  id: 'gh:solana-mobile/templates/mobile/kit-expo-wallet',
+  id: 'gh:solana-mobile/templates/mobile/expo-kit-wallet',
   keywords: [],
-  name: 'kit-expo-wallet',
-  path: 'mobile/kit-expo-wallet',
+  name: 'expo-kit-wallet',
+  path: 'mobile/expo-kit-wallet',
+}
+const minimalTemplate: TemplateJsonTemplate = {
+  description: 'A minimal Solana Mobile template',
+  id: 'gh:solana-mobile/templates/mobile/expo-kit-minimal',
+  keywords: [],
+  name: 'expo-kit-minimal',
+  path: 'mobile/expo-kit-minimal',
 }
 
 describe('core', () => {
@@ -507,7 +514,7 @@ describe('app', () => {
       'create',
       'my-app',
       '--template',
-      'mobile/kit-expo-wallet',
+      'mobile/expo-kit-wallet',
       '--pm',
       'pnpm',
       '--skip-git',
@@ -525,10 +532,40 @@ describe('app', () => {
         skipGit: true,
         skipInit: true,
         skipInstall: true,
-        template: 'mobile/kit-expo-wallet',
+        template: 'mobile/expo-kit-wallet',
         verbose: true,
       },
     ])
+  })
+
+  test('delegates the minimal template name for --minimal', async () => {
+    const createOptions: CreateCommandOptions[] = []
+    const app = createApp({
+      runCreate: async (options) => {
+        createOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--minimal', '--dry-run'])
+
+    expect(createOptions).toEqual([
+      { dryRun: true, minimal: true, projectName: 'my-app', template: 'expo-kit-minimal' },
+    ])
+  })
+
+  test('resolves the minimal template name from the catalog', async () => {
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    await runCreate(
+      { projectName: 'my-app', skipInstall: true, template: MINIMAL_TEMPLATE_NAME },
+      {
+        createSolanaDapp,
+        selectTemplate: async () => template,
+      },
+    )
+
+    expect(createAppArgs).toMatchObject([{ template: minimalTemplate }])
   })
 
   test('creates with selected template using create-solana-dapp API', async () => {
@@ -563,7 +600,7 @@ describe('app', () => {
     let selectCalled = false
 
     await runCreate(
-      { projectName: 'my-app', skipInstall: true, template: 'kit-expo-wallet' },
+      { projectName: 'my-app', skipInstall: true, template: 'expo-kit-wallet' },
       {
         createSolanaDapp,
         selectTemplate: async () => {
@@ -612,7 +649,7 @@ function createMockCreateSolanaDapp({ createAppArgs = [] }: { createAppArgs?: Cr
       return ['Install dependencies:']
     },
     detectInvokedPackageManager: () => 'bun',
-    fetchTemplateData: async () => ({ items: [], templates: [template] }),
+    fetchTemplateData: async () => ({ items: [], templates: [minimalTemplate, template] }),
     finalNote: () => 'Done',
     getAppInfo: () => ({ name: 'create-solana-dapp', version: '4.8.5' }),
     listTemplateIds: ({ templates }) => templates.map((template) => template.id),

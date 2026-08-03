@@ -1,6 +1,11 @@
 import { Command, InvalidArgumentError } from 'commander'
 import { readPackageMetadata } from './core/data-access/package-metadata.ts'
-import { type CreateCommandOptions, parsePackageManagerOption, runCreate } from './create/create-feature-index.ts'
+import {
+  type CreateCommandOptions,
+  MINIMAL_TEMPLATE_NAME,
+  parsePackageManagerOption,
+  runCreate,
+} from './create/create-feature-index.ts'
 import type { DoctorCommandOptions } from './doctor/doctor-feature-index.ts'
 import { runDoctor } from './doctor/doctor-feature-index.ts'
 import {
@@ -79,7 +84,7 @@ export function createApp({
       await runCreateCommand({
         ...options,
         projectName,
-        template: options.template ?? (options.minimal ? 'kit-expo-minimal' : undefined),
+        template: options.template ?? (options.minimal ? MINIMAL_TEMPLATE_NAME : undefined),
       })
     })
 
