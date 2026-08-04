@@ -28,6 +28,7 @@ import {
   runEmulatorStatus,
   runEmulatorStop,
 } from './emulator/emulator-feature-index.ts'
+import { runTemplatesCheck, type TemplatesCheckCommandOptions } from './templates/templates-feature-index.ts'
 
 export type AppOptions = {
   runEmulatorCreate?: (options: EmulatorCreateCommandOptions) => Promise<void>
@@ -41,6 +42,7 @@ export type AppOptions = {
   runEmulatorStop?: (options: EmulatorStopCommandOptions) => Promise<void>
   runCreate?: (options: CreateCommandOptions) => Promise<void>
   runDoctor?: (options: DoctorCommandOptions) => Promise<number>
+  runTemplatesCheck?: (options: TemplatesCheckCommandOptions) => Promise<void>
 }
 
 export function createApp({
@@ -55,6 +57,7 @@ export function createApp({
   runEmulatorStop: runEmulatorStopCommand = runEmulatorStop,
   runCreate: runCreateCommand = runCreate,
   runDoctor: runDoctorCommand = runDoctor,
+  runTemplatesCheck: runTemplatesCheckCommand = runTemplatesCheck,
 }: AppOptions = {}) {
   const metadata = readPackageMetadata()
   const app = new Command()
@@ -192,6 +195,20 @@ export function createApp({
     .description('Stop a running Android emulator')
     .action(async (nameOrSerial: string | undefined) => {
       await runEmulatorStopCommand({ nameOrSerial })
+    })
+
+  const templatesCommand = app.command('templates').description('Manage template repositories')
+
+  templatesCommand.action(() => {
+    templatesCommand.outputHelp()
+  })
+
+  templatesCommand
+    .command('check')
+    .description('Check generated template artifacts')
+    .option('--root <path>', 'Template repository root')
+    .action(async (options: TemplatesCheckCommandOptions) => {
+      await runTemplatesCheckCommand(options)
     })
 
   return app

@@ -1,0 +1,17 @@
+{
+  "name": "@example/templates",
+  "repokit": {
+    "groups": [
+      {
+        "description": "Mobile templates",
+        "name": "Mobile",
+        "path": "mobile"
+      }
+    ]
+  },
+  "repository": {
+    "name": "example/templates",
+    "type": "git",
+    "url": "https://github.com/example/templates"
+  }
+}

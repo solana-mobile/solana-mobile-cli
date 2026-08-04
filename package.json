@@ -8,7 +8,8 @@
   "dependencies": {
     "@clack/prompts": "1.6.0",
     "commander": "14.0.3",
-    "create-solana-dapp": "0.0.0-canary-20260716193854"
+    "create-solana-dapp": "0.0.0-canary-20260804175003",
+    "zod": "4.4.3"
   },
   "description": "CLI for Solana Mobile development.",
   "devDependencies": {
@@ -21,6 +22,18 @@
     "publint": "0.3.18",
     "tsdown": "0.21.7",
     "typescript": "6.0.2"
+  },
+  "exports": {
+    "./templates": {
+      "import": {
+        "types": "./dist/templates.d.mts",
+        "default": "./dist/templates.mjs"
+      },
+      "require": {
+        "types": "./dist/templates.d.cts",
+        "default": "./dist/templates.cjs"
+      }
+    }
   },
   "files": [
     "dist"

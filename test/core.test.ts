@@ -17,6 +17,7 @@ import type {
   EmulatorStatusCommandOptions,
   EmulatorStopCommandOptions,
 } from '../src/emulator/emulator-feature-index.ts'
+import type { TemplatesCheckCommandOptions } from '../src/templates/templates-feature-index.ts'
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   description: string
@@ -128,7 +129,7 @@ describe('app', () => {
   })
 
   test('registers commands', () => {
-    expect(createApp().commands.map((command) => command.name())).toEqual(['create', 'doctor', 'emulator'])
+    expect(createApp().commands.map((command) => command.name())).toEqual(['create', 'doctor', 'emulator', 'templates'])
   })
 
   test('prints command help without arguments', async () => {
@@ -160,6 +161,7 @@ describe('app', () => {
     expect(output.join('')).toContain('create')
     expect(output.join('')).toContain('doctor')
     expect(output.join('')).toContain('emulator')
+    expect(output.join('')).toContain('templates')
     expect(createCalled).toBe(false)
     expect(doctorCalled).toBe(false)
   })
@@ -227,6 +229,44 @@ describe('app', () => {
     await app.parseAsync(['node', 'solana-mobile', 'emu', 'list'])
 
     expect(emulatorListOptions).toEqual([{}])
+  })
+
+  test('registers templates subcommands', () => {
+    const templatesCommand = createApp().commands.find((command) => command.name() === 'templates')
+
+    expect(templatesCommand?.commands.map((command) => command.name())).toEqual(['check'])
+  })
+
+  test('does not delegate templates command to check', async () => {
+    const templatesCheckOptions: TemplatesCheckCommandOptions[] = []
+    const app = createApp({
+      runTemplatesCheck: async (options) => {
+        templatesCheckOptions.push(options)
+      },
+    })
+    const templatesCommand = app.commands.find((command) => command.name() === 'templates')
+
+    templatesCommand?.configureOutput({
+      writeErr: () => {},
+      writeOut: () => {},
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'templates'])
+
+    expect(templatesCheckOptions).toEqual([])
+  })
+
+  test('delegates templates check command options', async () => {
+    const templatesCheckOptions: TemplatesCheckCommandOptions[] = []
+    const app = createApp({
+      runTemplatesCheck: async (options) => {
+        templatesCheckOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'templates', 'check', '--root', '/repo'])
+
+    expect(templatesCheckOptions).toEqual([{ root: '/repo' }])
   })
 
   test('does not delegate emulator images command to list', async () => {
