@@ -54,7 +54,13 @@ export interface EmulatorStopCommandOptions {
   nameOrSerial?: string
 }
 
-export type CommandRunner = (cmd: [string, ...string[]], options?: RunCommandOptions) => Promise<string>
+import type {
+  CommandRunner,
+  InteractiveCommandRunner,
+  RunCommandOptions,
+} from '../../core/data-access/command-types.ts'
+
+export type { CommandRunner, InteractiveCommandRunner, RunCommandOptions }
 
 export interface CreateAvdDependencies {
   getHomeDirectory?: HomeDirectoryResolver
@@ -99,8 +105,6 @@ export type FileWriter = (filePath: string, contents: string) => Promise<void>
 
 export type HomeDirectoryResolver = () => string
 
-export type InteractiveCommandRunner = (cmd: [string, ...string[]]) => Promise<void>
-
 export interface InstalledAvd {
   device?: string
   name: string
@@ -141,10 +145,6 @@ export interface ResolvedCreateOptions {
   sdcardSize: string
   systemImage: string
   vmHeapMb: number
-}
-
-export interface RunCommandOptions {
-  stdin?: string
 }
 
 export interface RunningEmulator {

@@ -1,5 +1,5 @@
+import { runExecutable } from '../../core/data-access/run-executable.ts'
 import type { EmulatorAdbDevice, ListRunningEmulatorsDependencies, RunningEmulator } from './emulator-types.ts'
-import { runExecutable } from './run-executable.ts'
 
 export async function listRunningEmulators({
   runCommand = runExecutable,

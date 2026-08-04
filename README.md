@@ -8,6 +8,7 @@ CLI for Solana Mobile development.
 - **Create projects** — scaffold Solana Mobile apps from the template catalog
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, and stop local Android emulators
+- **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
 - **Template repository checks** — verify that a template repository's generated artifacts are up to date
 
 ## Usage
@@ -79,6 +80,109 @@ npx solana-mobile emulator stop local_phone
 # Use the short alias
 npx solana-mobile emu list
 ```
+
+### Run a local validator
+
+Give apps running in an emulator or on a physical device access to a validator on your machine, so you can develop
+against localnet instead of devnet.
+
+```bash
+# Start a validator, forward it to every connected device, and keep the forwards alive
+npx solana-mobile localnet
+
+# Leave it running in the background
+npx solana-mobile localnet start --detach
+
+# Use solana-test-validator instead of surfpool
+npx solana-mobile localnet start --engine test-validator
+
+# Forward an already-running validator without starting one
+npx solana-mobile localnet forward
+
+# Verify the validator is reachable from every device
+npx solana-mobile localnet check
+npx solana-mobile localnet check --json
+
+# Show the validator and port forward status
+npx solana-mobile localnet status
+
+# Print validator logs
+npx solana-mobile localnet logs
+
+# Stop the validator and remove its port forwards
+npx solana-mobile localnet stop
+```
+
+The default engine is [surfpool](https://github.com/txtx/surfpool); `--engine test-validator` runs
+`solana-test-validator` instead.
+
+`localnet` checks the RPC port before it starts anything. If a validator already answers there — a native build you
+are running yourself, or one you started by hand — it attaches to that instead of starting a container, and reports
+which one it found:
+
+```
+│  Found a validator already running on http://localhost:8899 (surfnet 0.12.0). Not starting a container.
+```
+
+This is what makes working on a validator itself practical: run your build, then forward it.
+
+```bash
+cargo run -- start --no-tui     # your own surfpool build on 8899
+npx solana-mobile localnet      # attaches to it, forwards it, no container
+```
+
+Docker is only needed when localnet actually has to start a container. It never stops a validator it did not start,
+and `Ctrl-C` removes only the port forwards in that case.
+
+Forwarding uses `adb reverse`, so the same URL works everywhere — on an emulator, on a USB device, and on your
+machine. `localnet` prints the endpoints it set up:
+
+```
+RPC     http://localhost:8899
+WS      ws://localhost:8900
+Studio  http://localhost:18488
+```
+
+Point your app's RPC configuration at the RPC URL, whatever your project calls it. With surfpool, open the Studio URL
+in your browser to inspect accounts, transactions, and logs.
+
+Reverse forwards are removed whenever an emulator reboots, a device is unplugged, or `adb kill-server` runs. Watching
+is on by default for `localnet` and `localnet start`, which re-applies them when a device connects, reconnects, or
+reboots; pass `--no-watch` to disable it. Only forwards this session created are ever removed, so unrelated forwards
+such as Metro on `8081` — and a reverse you had already set up on a localnet port — are left alone.
+
+`--detach` is one-shot: it applies the forwards and exits, so nothing is left running to re-apply them. Re-run
+`localnet forward` after a device reconnects or reboots, or keep `localnet` in the foreground to have it watched.
+A detached run records which forwards it created in `~/.solana-mobile/localnet-forwards.json` so that a later
+`localnet stop` removes exactly those and leaves everything else alone; `stop` deletes the file when it is done.
+
+The validator is published on `127.0.0.1` only, so it is reachable from this machine and through `adb reverse`, but
+not from the rest of the network.
+
+`--port` moves the **host** port only. The device keeps seeing the canonical port, so app configuration never changes:
+
+```bash
+# Validator published on host port 9899; the device still uses http://localhost:8899
+npx solana-mobile localnet start --port 9899
+```
+
+`--engine` and the host port options are read back from the running container, so a detached session does not need
+them repeated:
+
+```bash
+npx solana-mobile localnet start --detach --engine test-validator --port 9899
+npx solana-mobile localnet status   # reports test-validator on 9899
+```
+
+`localnet check` verifies two things separately, because neither alone covers the path: a real JSON-RPC call from
+your machine proves the validator is alive, and on the device side `adb reverse --list` is compared against the exact
+host port expected before a TCP connect from inside the device proves the tunnel carries traffic. Checking the
+mapping matters because `adbd` accepts on the device listener even when the reverse points at a dead host port.
+Android ships no HTTP client, so the device leg cannot make an RPC call itself.
+
+If `check` passes but your app still cannot connect, the usual cause is cleartext HTTP: Android blocks `http://` by
+default from API 28. Allow it for local development with `android:usesCleartextTraffic="true"` or a network security
+config in `AndroidManifest.xml`.
 
 ### Create a project
 
@@ -189,6 +293,17 @@ node dist/cli.mjs doctor
 ## Testing
 
 Unit tests (`bun test`) run without any external dependencies.
+
+Integration tests boot each `localnet` engine for real and check it answers JSON-RPC, which the unit tests cannot
+do — they only assert the `docker run` command we build, not that it works. Those require Docker:
+
+```bash
+bun run test:integration
+```
+
+They use their own container name and host ports, so running them will not disturb a `solana-mobile localnet`
+session. CI runs them nightly and on pull requests that touch `src/localnet/`, because the images and their flags
+can change with no commit on our side.
 
 ## License
 

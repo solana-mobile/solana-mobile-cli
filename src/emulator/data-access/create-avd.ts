@@ -2,6 +2,7 @@ import { constants } from 'node:fs'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { runExecutable } from '../../core/data-access/run-executable.ts'
 import {
   createAvdConfigValues,
   getToolPaths,
@@ -20,7 +21,6 @@ import type {
 import { listInstalledSystemImages, resolveInstalledSystemImage } from './list-installed-system-images.ts'
 import { resolveAndroidCommandLineTool } from './resolve-android-command-line-tool.ts'
 import { resolveAndroidSdkRoot } from './resolve-android-sdk-root.ts'
-import { runExecutable } from './run-executable.ts'
 
 export async function createAvd(
   options: EmulatorCreateCommandOptions,
