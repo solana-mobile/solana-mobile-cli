@@ -1,0 +1,11 @@
+{
+  "create-solana-dapp": {
+    "instructions": ["Run {pm} start"],
+    "skills": ["wallet-ui"]
+  },
+  "description": "An example mobile template.",
+  "displayName": "Example Mobile",
+  "keywords": ["example", "mobile"],
+  "name": "example",
+  "usecase": "Mobile"
+}

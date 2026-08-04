@@ -8,6 +8,7 @@ CLI for Solana Mobile development.
 - **Create projects** — scaffold Solana Mobile apps from the template catalog
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, and stop local Android emulators
+- **Template repository checks** — verify that a template repository's generated artifacts are up to date
 
 ## Usage
 
@@ -116,6 +117,21 @@ workflows.
 The command is diagnostic only and never installs or modifies dependencies. Missing required dependencies produce
 exit code `1`; warnings do not.
 
+### Check a template repository
+
+```bash
+# Check the template repository in the current directory
+npx solana-mobile templates check
+
+# Check a template repository somewhere else
+npx solana-mobile templates check --root ../solana-mobile-templates
+```
+
+The command reads the repository and reports every problem it finds — invalid template manifests, missing or
+incorrectly sized `og-image.png` files, duplicate template names, and generated artifacts (`.github/workflows/templates.json`,
+`TEMPLATES.md`, and `templates.json`) that are missing or out of date. Artifacts are only compared once the templates
+themselves are valid. Nothing is written; problems produce exit code `1`, which makes it usable as a CI check.
+
 ### Show command help
 
 ```bash
@@ -135,6 +151,10 @@ npx solana-mobile
 - `--skip-install` — Skip dependency installation
 - `--template <templateName>` — Use a specific template
 - `--verbose` — Print verbose output
+
+### Templates check options
+
+- `--root <path>` — Template repository root, defaults to the current directory
 
 ## Development
 

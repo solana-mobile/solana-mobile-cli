@@ -6,7 +6,7 @@ export default defineConfig({
     onlyBundle: false,
   },
   dts: true,
-  entry: ['src/cli.ts'],
+  entry: ['src/cli.ts', 'src/templates.ts'],
   format: ['esm', 'cjs'],
   sourcemap: true,
 })
