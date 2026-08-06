@@ -52,8 +52,10 @@ import {
 } from './localnet/localnet-feature-index.ts'
 import {
   runTemplatesCheck,
+  runTemplatesGenerate,
   runTemplatesSync,
   type TemplatesCheckCommandOptions,
+  type TemplatesGenerateCommandOptions,
   type TemplatesSyncCommandOptions,
 } from './templates/templates-feature-index.ts'
 
@@ -78,6 +80,7 @@ export type AppOptions = {
   runCreate?: (options: CreateCommandOptions) => Promise<void>
   runDoctor?: (options: DoctorCommandOptions) => Promise<number>
   runTemplatesCheck?: (options: TemplatesCheckCommandOptions) => Promise<void>
+  runTemplatesGenerate?: (options: TemplatesGenerateCommandOptions) => Promise<void>
   runTemplatesSync?: (options: TemplatesSyncCommandOptions) => Promise<void>
 }
 
@@ -102,6 +105,7 @@ export function createApp({
   runCreate: runCreateCommand = runCreate,
   runDoctor: runDoctorCommand = runDoctor,
   runTemplatesCheck: runTemplatesCheckCommand = runTemplatesCheck,
+  runTemplatesGenerate: runTemplatesGenerateCommand = runTemplatesGenerate,
   runTemplatesSync: runTemplatesSyncCommand = runTemplatesSync,
 }: AppOptions = {}) {
   const metadata = readPackageMetadata()
@@ -339,6 +343,14 @@ export function createApp({
     .option('--root <path>', 'Template repository root')
     .action(async (options: TemplatesCheckCommandOptions) => {
       await runTemplatesCheckCommand(options)
+    })
+
+  templatesCommand
+    .command('generate')
+    .description('Generate template artifacts')
+    .option('--root <path>', 'Template repository root')
+    .action(async (options: TemplatesGenerateCommandOptions) => {
+      await runTemplatesGenerateCommand(options)
     })
 
   templatesCommand

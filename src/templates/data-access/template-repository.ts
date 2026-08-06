@@ -1,6 +1,6 @@
 import type { Dirent } from 'node:fs'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, posix } from 'node:path'
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, posix } from 'node:path'
 import { parseTemplateJson, type TemplateJsonGroup, type TemplateJsonTemplate } from 'create-solana-dapp'
 import type { z } from 'zod'
 import {
@@ -17,6 +17,11 @@ export interface TemplateRepositoryArtifact {
 export interface TemplateRepositoryCheckResult {
   artifacts: TemplateRepositoryArtifact[]
   issues: string[]
+}
+
+export interface TemplateRepositoryWriteResult {
+  path: string
+  status: 'unchanged' | 'written'
 }
 
 export interface TemplateMetadata {
@@ -86,7 +91,40 @@ export function renderTemplateRepository(root: string): TemplateRepositoryArtifa
   return renderArtifacts(repository.value)
 }
 
+/**
+ * Writes the rendered artifacts to disk, skipping files that are already byte-identical so an up-to-date repository
+ * keeps its file timestamps and the caller can report what actually changed. Every artifact path is checked for
+ * symlinks before anything is written, so a refused repository is left exactly as it was found.
+ */
+export function writeTemplateRepository(root: string): TemplateRepositoryWriteResult[] {
+  const artifacts = renderTemplateRepository(root)
+  const issues = artifacts.flatMap((artifact) => findSymlinkedPathComponents(root, artifact.path))
+
+  if (issues.length > 0) {
+    throw new Error(`Refusing to write template artifacts:\n- ${issues.join('\n- ')}`)
+  }
+
+  return artifacts.map((artifact) => {
+    const artifactPath = join(root, artifact.path)
+
+    if (existsSync(artifactPath) && readFileSync(artifactPath, 'utf8') === artifact.content) {
+      return { path: artifact.path, status: 'unchanged' }
+    }
+
+    mkdirSync(dirname(artifactPath), { recursive: true })
+    writeFileSync(artifactPath, artifact.content)
+
+    return { path: artifact.path, status: 'written' }
+  })
+}
+
 function compareArtifact(root: string, artifact: TemplateRepositoryArtifact): string[] {
+  const symlinked = findSymlinkedPathComponents(root, artifact.path)
+
+  if (symlinked.length > 0) {
+    return symlinked
+  }
+
   const artifactPath = join(root, artifact.path)
 
   if (!existsSync(artifactPath)) {
@@ -149,6 +187,34 @@ function discoverTemplates(
   }
 
   return { issues, templates }
+}
+
+/**
+ * Reading and writing through a symlinked artifact path would touch whatever the link points to — a checked-in
+ * `templates.json -> ../elsewhere` would let `writeTemplateRepository` overwrite an arbitrary writable path outside
+ * the repository. Every path component is inspected with `lstat` because `existsSync` follows links, so a dangling
+ * symlink looks like a missing file while still redirecting the write that would create it.
+ */
+function findSymlinkedPathComponents(root: string, artifactPath: string): string[] {
+  let currentLabel = ''
+  let currentPath = root
+
+  for (const segment of artifactPath.split(posix.sep)) {
+    currentLabel = currentLabel === '' ? segment : posix.join(currentLabel, segment)
+    currentPath = join(currentPath, segment)
+
+    const stats = lstatSync(currentPath, { throwIfNoEntry: false })
+
+    if (!stats) {
+      return []
+    }
+
+    if (stats.isSymbolicLink()) {
+      return [`${currentLabel} is a symbolic link`]
+    }
+  }
+
+  return []
 }
 
 function extractTemplatePaths(groups: TemplateJsonGroup[]) {

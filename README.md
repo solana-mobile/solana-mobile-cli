@@ -272,6 +272,20 @@ incorrectly sized `og-image.png` files, duplicate template names, and generated 
 `TEMPLATES.md`, and `templates.json`) that are missing or out of date. Artifacts are only compared once the templates
 themselves are valid. Nothing is written; problems produce exit code `1`, which makes it usable as a CI check.
 
+### Generate template repository artifacts
+
+```bash
+# Generate artifacts for the template repository in the current directory
+npx solana-mobile templates generate
+
+# Generate artifacts for a template repository somewhere else
+npx solana-mobile templates generate --root ../solana-mobile-templates
+```
+
+The command renders the same artifacts `templates check` compares against and writes the ones that are missing or out
+of date, leaving already up-to-date files untouched. An invalid repository produces exit code `1` and nothing is
+written, so `generate` never turns template problems into stale artifacts.
+
 ### Sync a template repository
 
 ```bash

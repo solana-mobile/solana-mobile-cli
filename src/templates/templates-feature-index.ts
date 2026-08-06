@@ -12,8 +12,13 @@ export type {
   TemplateRepositoryArtifact,
   TemplateRepositoryCheckResult,
   TemplateRepositoryGroup,
+  TemplateRepositoryWriteResult,
 } from './data-access/template-repository.ts'
-export { checkTemplateRepository, renderTemplateRepository } from './data-access/template-repository.ts'
+export {
+  checkTemplateRepository,
+  renderTemplateRepository,
+  writeTemplateRepository,
+} from './data-access/template-repository.ts'
 export type {
   TemplateGroupConfig,
   TemplatePackageJson,
@@ -25,4 +30,5 @@ export {
   TemplateRepositoryPackageJsonSchema,
 } from './data-access/template-repository-schema.ts'
 export { runTemplatesCheck, type TemplatesCheckCommandOptions } from './templates-feature-check.ts'
+export { runTemplatesGenerate, type TemplatesGenerateCommandOptions } from './templates-feature-generate.ts'
 export { runTemplatesSync, type TemplatesSyncCommandOptions } from './templates-feature-sync.ts'
