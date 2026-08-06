@@ -390,7 +390,7 @@ describe('app', () => {
   test('registers templates subcommands', () => {
     const templatesCommand = createApp().commands.find((command) => command.name() === 'templates')
 
-    expect(templatesCommand?.commands.map((command) => command.name())).toEqual(['check'])
+    expect(templatesCommand?.commands.map((command) => command.name())).toEqual(['check', 'sync'])
   })
 
   test('does not delegate templates command to check', async () => {
