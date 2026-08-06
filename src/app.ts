@@ -8,6 +8,7 @@ import {
 import { formatUpdateWarning } from './core/ui/core-ui-update-warning.ts'
 import {
   type CreateCommandOptions,
+  extractTemplateOptions,
   MINIMAL_TEMPLATE_NAME,
   parsePackageManagerOption,
   runCreate,
@@ -141,7 +142,12 @@ export function createApp({
     }
   })
 
-  app
+  // Template options (e.g. `--reset-project`) are extracted from the raw arguments before
+  // commander parses them: commander drops the `--` separator and reroutes operands once it hits
+  // an unknown option, so the leftovers arrive too mangled to parse reliably.
+  let createTemplateOptions: string[] = []
+
+  const createCommand = app
     .command('create [projectName]')
     .description('Create a new Solana Mobile project')
     .option('--pm, --package-manager <packageManager>', 'Package manager to use', parsePackageManagerOption)
@@ -155,13 +161,35 @@ export function createApp({
     .option('--skip-init', 'Skip running the init script')
     .option('--skip-install', 'Skip installing dependencies')
     .option('-v, --verbose', 'Verbose output')
+    .addHelpText(
+      'after',
+      '\nOptions declared by the selected template are passed through as boolean long flags, e.g.:\n  $ solana-mobile create my-app --minimal --reset-project',
+    )
     .action(async (projectName: string | undefined, options: CreateCommandOptions) => {
+      if (options.minimal && options.template) {
+        createCommand.error(
+          `error: The --minimal flag can't be used in combination with --template. Please specify only one.`,
+        )
+      }
+
       await runCreateCommand({
         ...options,
         projectName,
         template: options.template ?? (options.minimal ? MINIMAL_TEMPLATE_NAME : undefined),
+        templateOptions: createTemplateOptions,
       })
     })
+
+  const parseCreateCommandOptions = createCommand.parseOptions.bind(createCommand)
+  createCommand.parseOptions = (argv: string[]) => {
+    try {
+      const extracted = extractTemplateOptions(createCommand, argv)
+      createTemplateOptions = extracted.templateOptions
+      return parseCreateCommandOptions(extracted.args)
+    } catch (error) {
+      return createCommand.error(`error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
 
   const deviceCommand = app.command('device').description('Work with connected devices and emulators')
 

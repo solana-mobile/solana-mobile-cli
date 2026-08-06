@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import type { CreateAppArgs, TemplateJsonTemplate } from 'create-solana-dapp'
+import type { CreateAppArgs, Template, TemplateJsonTemplate } from 'create-solana-dapp'
 import { createApp, runApp } from '../src/app.ts'
 import { readPackageMetadata } from '../src/core/data-access/package-metadata.ts'
 import { checkForNewerVersion, isVersionGreater } from '../src/core/data-access/version-check.ts'
@@ -8,7 +8,8 @@ import { formatUpdateWarning } from '../src/core/ui/core-ui-update-warning.ts'
 import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
 import { readPackageString } from '../src/core/util/read-package-string.ts'
 import type { CreateCommandOptions, CreateSolanaDappApi } from '../src/create/create-feature-index.ts'
-import { MINIMAL_TEMPLATE_NAME, runCreate } from '../src/create/create-feature-index.ts'
+import { getInitialProjectName, MINIMAL_TEMPLATE_NAME, runCreate } from '../src/create/create-feature-index.ts'
+import { projectNameSchema, validateProjectName } from '../src/create/data-access/validate-project-name.ts'
 import type {
   EmulatorCreateCommandOptions,
   EmulatorDeleteCommandOptions,
@@ -934,6 +935,7 @@ describe('app', () => {
         skipInit: true,
         skipInstall: true,
         template: 'mobile/expo-kit-wallet',
+        templateOptions: [],
         verbose: true,
       },
     ])
@@ -950,8 +952,129 @@ describe('app', () => {
     await app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--minimal', '--dry-run'])
 
     expect(createOptions).toEqual([
-      { dryRun: true, minimal: true, projectName: 'my-app', template: 'expo-kit-minimal' },
+      { dryRun: true, minimal: true, projectName: 'my-app', template: 'expo-kit-minimal', templateOptions: [] },
     ])
+  })
+
+  test('passes template options through to runCreate', async () => {
+    const createOptions: CreateCommandOptions[] = []
+    const app = createApp({
+      runCreate: async (options) => {
+        createOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--minimal', '--reset-project', '--dry-run'])
+
+    expect(createOptions[0]).toMatchObject({ projectName: 'my-app', templateOptions: ['reset-project'] })
+  })
+
+  test('recovers the project name when a template option precedes it', async () => {
+    // commander reroutes operands that follow an unknown option into the leftover args, so the
+    // declared [projectName] argument would resolve to '--reset-project' here.
+    const createOptions: CreateCommandOptions[] = []
+    const app = createApp({
+      runCreate: async (options) => {
+        createOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'create', '--reset-project', 'my-app', '--dry-run'])
+
+    expect(createOptions[0]).toMatchObject({ projectName: 'my-app', templateOptions: ['reset-project'] })
+  })
+
+  test('passes the project name after the -- separator', async () => {
+    // commander keeps the literal `--` in the leftover args when an unknown option precedes it
+    const createOptions: CreateCommandOptions[] = []
+    const app = createApp({
+      runCreate: async (options) => {
+        createOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'create', '--reset-project', '--', 'sentinel-app'])
+
+    expect(createOptions[0]).toMatchObject({ projectName: 'sentinel-app', templateOptions: ['reset-project'] })
+  })
+
+  test('treats dash-prefixed args after -- as positionals, not template options', async () => {
+    const createOptions: CreateCommandOptions[] = []
+    const app = createApp({
+      runCreate: async (options) => {
+        createOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'create', '--reset-project', '--', '--not-an-option'])
+
+    // The invalid name is rejected later by project name validation, not silently collected as an option
+    expect(createOptions[0]).toMatchObject({ projectName: '--not-an-option', templateOptions: ['reset-project'] })
+  })
+
+  test('rejects combining --minimal with --template', async () => {
+    const app = createAppWithSilencedCreateCommand()
+
+    expect(
+      app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--minimal', '--template', 'expo-kit-wallet']),
+    ).rejects.toThrow(`The --minimal flag can't be used in combination with --template`)
+  })
+
+  test('rejects template options that are not boolean long flags', async () => {
+    const app = createAppWithSilencedCreateCommand()
+
+    expect(app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--reset-project=yes'])).rejects.toThrow(
+      'Template options must be boolean long flags',
+    )
+  })
+
+  test('rejects extra arguments', async () => {
+    const app = createAppWithSilencedCreateCommand()
+
+    expect(app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', 'extra'])).rejects.toThrow('too many arguments')
+  })
+
+  test('rejects template options placed after the -- separator as excess arguments', async () => {
+    // Everything after `--` is positional, even when commander itself would have dropped the
+    // separator before the extraction could see it
+    const app = createAppWithSilencedCreateCommand()
+
+    expect(
+      app.parseAsync(['node', 'solana-mobile', 'create', '--', 'sentinel-app', '--reset-project']),
+    ).rejects.toThrow('too many arguments')
+  })
+
+  test('treats a lone dash-prefixed arg after -- as the project name', async () => {
+    const createOptions: CreateCommandOptions[] = []
+    const app = createApp({
+      runCreate: async (options) => {
+        createOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'create', '--', '--not-an-option'])
+
+    // Rejected later by project name validation, not silently collected as a template option
+    expect(createOptions[0]).toMatchObject({ projectName: '--not-an-option', templateOptions: [] })
+  })
+
+  test('shows help for create --help instead of collecting it as a template option', async () => {
+    // The help option is registered outside `command.options`, so the extraction special-cases it
+    const app = createAppWithSilencedCreateCommand()
+    let helpText = ''
+    app.commands
+      .find((command) => command.name() === 'create')
+      ?.configureOutput({
+        writeErr: () => {},
+        writeOut: (text) => {
+          helpText += text
+        },
+      })
+
+    await expect(app.parseAsync(['node', 'solana-mobile', 'create', '--help'])).rejects.toMatchObject({
+      code: 'commander.helpDisplayed',
+    })
+    expect(helpText).toContain('Usage: solana-mobile create')
   })
 
   test('resolves the minimal template name from the catalog', async () => {
@@ -986,6 +1109,8 @@ describe('app', () => {
         dryRun: false,
         name: 'my-app',
         packageManager: 'bun',
+        // Detected rather than selected, so createApp may switch to a template-required manager
+        packageManagerExplicit: false,
         skipGit: false,
         skipInit: false,
         skipInstall: true,
@@ -993,6 +1118,44 @@ describe('app', () => {
         verbose: false,
       },
     ])
+  })
+
+  test('marks an explicitly selected package manager as explicit', async () => {
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    await runCreate(
+      { packageManager: 'pnpm', projectName: 'my-app', skipInstall: true },
+      {
+        createSolanaDapp,
+        selectTemplate: async () => template,
+      },
+    )
+
+    expect(createAppArgs).toMatchObject([{ packageManager: 'pnpm', packageManagerExplicit: true }])
+  })
+
+  test('rejects an invalid positional project name before creating', async () => {
+    // The positional name flows into the generated package.json and the rename search key, so it
+    // gets the same validation as the prompt
+    const previousExitCode = process.exitCode
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    try {
+      await runCreate(
+        { projectName: 'My_App', skipInstall: true, template: 'expo-kit-wallet' },
+        {
+          createSolanaDapp,
+          selectTemplate: async () => template,
+        },
+      )
+
+      expect(createAppArgs).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
   })
 
   test('creates without selecting when template is provided', async () => {
@@ -1015,33 +1178,138 @@ describe('app', () => {
     expect(selectCalled).toBe(false)
   })
 
-  test('stops before selecting a template when project name is canceled', async () => {
+  test('forwards template options to create-solana-dapp', async () => {
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    await runCreate(
+      {
+        projectName: 'my-app',
+        skipInstall: true,
+        template: 'expo-kit-wallet',
+        templateOptions: ['reset-project'],
+      },
+      {
+        createSolanaDapp,
+        selectTemplate: async () => template,
+      },
+    )
+
+    expect(createAppArgs).toMatchObject([{ templateOptions: ['reset-project'] }])
+  })
+
+  test('passes the selected template to the project name prompt', async () => {
+    // The prompt pre-fills the project name from the selected template, so it needs the selection
+    const createSolanaDapp = createMockCreateSolanaDapp()
+    let promptedTemplate: Template | undefined
+
+    await runCreate(
+      { skipInstall: true },
+      {
+        createSolanaDapp,
+        promptProjectName: async (_createSolanaDapp, template) => {
+          promptedTemplate = template
+          return 'my-app'
+        },
+        selectTemplate: async () => template,
+      },
+    )
+
+    expect(promptedTemplate).toBe(template)
+  })
+
+  test('derives the initial project name from the template name', () => {
+    expect(getInitialProjectName(template)).toBe('expo-kit-wallet')
+    // External templates keep their raw reference as the name; only the last segment is usable
+    expect(getInitialProjectName({ ...template, name: 'solana-mobile/templates' })).toBe('templates')
+    expect(getInitialProjectName({ ...template, name: 'solana-mobile/templates/' })).toBe('templates')
+    // An invalid candidate is dropped rather than rewritten
+    expect(getInitialProjectName({ ...template, name: 'My_Template' })).toBeUndefined()
+  })
+
+  test('stops before prompting a project name when template selection is canceled', async () => {
     const previousExitCode = process.exitCode
     const createAppArgs: CreateAppArgs[] = []
     const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
-    let selectCalled = false
+    let promptCalled = false
 
     try {
       await runCreate(
         {},
         {
           createSolanaDapp,
-          promptProjectName: async () => undefined,
-          selectTemplate: async () => {
-            selectCalled = true
-            return template
+          promptProjectName: async () => {
+            promptCalled = true
+            return 'my-app'
           },
+          selectTemplate: async () => undefined,
         },
       )
 
       expect(createAppArgs).toEqual([])
       expect(process.exitCode).toBe(1)
-      expect(selectCalled).toBe(false)
+      expect(promptCalled).toBe(false)
     } finally {
       process.exitCode = previousExitCode ?? 0
     }
   })
 })
+
+describe('validate project name', () => {
+  test.each(['a', 'app', 'my-app', 'my-app-2', 'web3'])('accepts %p', (name) => {
+    expect(validateProjectName(name)).toBeUndefined()
+  })
+
+  test.each([
+    '-app',
+    '9lives',
+    '@scope/app',
+    'My-App',
+    'app-',
+    'my app',
+    'my--app',
+    'my.app',
+    'my_app',
+  ])('rejects %p', (name) => {
+    expect(validateProjectName(name)).toBe(
+      'Please enter a valid project name (lowercase letters, numbers, and single dashes, starting with a letter)',
+    )
+  })
+
+  test('rejects an empty name', () => {
+    expect(validateProjectName('')).toBe('Please enter at least 1 character')
+  })
+
+  test('rejects a name longer than 214 characters', () => {
+    expect(validateProjectName('a'.repeat(215))).toBe('Please enter a name with at most 214 characters')
+  })
+
+  test('accepts a name of exactly 214 characters', () => {
+    expect(validateProjectName('a'.repeat(214))).toBeUndefined()
+  })
+
+  test('rejects a valid name when the directory already exists', () => {
+    // bun test runs from the repo root, where `src` exists
+    expect(validateProjectName('src')).toBe('Directory already exists')
+  })
+
+  test('does not check the filesystem in the schema alone', () => {
+    expect(projectNameSchema.safeParse('src').success).toBe(true)
+  })
+})
+
+function createAppWithSilencedCreateCommand() {
+  const app = createApp({ runCreate: async () => {} })
+
+  app.exitOverride()
+  app.configureOutput({ writeErr: () => {}, writeOut: () => {} })
+  app.commands
+    .find((command) => command.name() === 'create')
+    ?.exitOverride()
+    .configureOutput({ writeErr: () => {}, writeOut: () => {} })
+
+  return app
+}
 
 function createMockCreateSolanaDapp({ createAppArgs = [] }: { createAppArgs?: CreateAppArgs[] } = {}) {
   return {
@@ -1056,6 +1324,6 @@ function createMockCreateSolanaDapp({ createAppArgs = [] }: { createAppArgs?: Cr
     listTemplateIds: ({ templates }) => templates.map((template) => template.id),
     listTemplates: () => {},
     listVersions: () => {},
-    validateProjectName: (name) => (name ? undefined : 'Please enter at least 1 character'),
+    validateProjectName,
   } satisfies CreateSolanaDappApi
 }
