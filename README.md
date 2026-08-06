@@ -6,6 +6,7 @@ CLI for Solana Mobile development.
 
 - **Command help** — show available subcommands when no command is provided
 - **Create projects** — scaffold Solana Mobile apps from the template catalog
+- **Device helpers** — list connected devices and open URLs, dev servers, and deep links on them
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, and stop local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
@@ -79,6 +80,41 @@ npx solana-mobile emulator stop local_phone
 
 # Use the short alias
 npx solana-mobile emu list
+```
+
+### Work with connected devices
+
+Works with emulators and physical devices alike. When a URL points at `localhost`, its port is forwarded to the
+device with `adb reverse` first, so a dev server on this computer opens on a USB device too.
+
+```bash
+# List connected devices and emulators, with names and states
+npx solana-mobile device list
+
+# List as JSON
+npx solana-mobile device list --json
+
+# Open by choosing from the URLs the device can already reach; devices with several
+# connected pick from a list, a single device is used directly
+npx solana-mobile device open
+
+# Open a URL in the device browser
+npx solana-mobile device open http://localhost:18488/
+
+# Open a dev server by port
+npx solana-mobile device open 3000
+
+# Open a deep link (quoted so the shell does not glob the ?)
+npx solana-mobile device open 'myapp://claim?id=123'
+
+# Target a specific device
+npx solana-mobile device open 3000 --device SM02E4072816572
+
+# Open without creating an adb reverse for localhost URLs
+npx solana-mobile device open 3000 --no-forward
+
+# Explain URL and port forwarding decisions
+npx solana-mobile device open 3000 --verbose
 ```
 
 ### Run a local validator

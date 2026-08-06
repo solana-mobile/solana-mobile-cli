@@ -6,6 +6,12 @@ import {
   parsePackageManagerOption,
   runCreate,
 } from './create/create-feature-index.ts'
+import {
+  type DeviceListCommandOptions,
+  type DeviceOpenCommandOptions,
+  runDeviceList,
+  runDeviceOpen,
+} from './device/device-feature-index.ts'
 import type { DoctorCommandOptions } from './doctor/doctor-feature-index.ts'
 import { runDoctor } from './doctor/doctor-feature-index.ts'
 import {
@@ -47,6 +53,8 @@ import {
 import { runTemplatesCheck, type TemplatesCheckCommandOptions } from './templates/templates-feature-index.ts'
 
 export type AppOptions = {
+  runDeviceList?: (options: DeviceListCommandOptions) => Promise<void>
+  runDeviceOpen?: (options: DeviceOpenCommandOptions) => Promise<void>
   runEmulatorCreate?: (options: EmulatorCreateCommandOptions) => Promise<void>
   runEmulatorDelete?: (options: EmulatorDeleteCommandOptions) => Promise<void>
   runEmulatorImages?: (options: EmulatorImagesCommandOptions) => Promise<void>
@@ -68,6 +76,8 @@ export type AppOptions = {
 }
 
 export function createApp({
+  runDeviceList: runDeviceListCommand = runDeviceList,
+  runDeviceOpen: runDeviceOpenCommand = runDeviceOpen,
   runEmulatorCreate: runEmulatorCreateCommand = runEmulatorCreate,
   runEmulatorDelete: runEmulatorDeleteCommand = runEmulatorDelete,
   runEmulatorImages: runEmulatorImagesCommand = runEmulatorImages,
@@ -117,6 +127,30 @@ export function createApp({
         projectName,
         template: options.template ?? (options.minimal ? MINIMAL_TEMPLATE_NAME : undefined),
       })
+    })
+
+  const deviceCommand = app.command('device').description('Work with connected devices and emulators')
+
+  deviceCommand.action(() => {
+    deviceCommand.outputHelp()
+  })
+
+  deviceCommand
+    .command('list')
+    .description('List connected devices and emulators')
+    .option('--json', 'Print a stable JSON report')
+    .action(async (options: DeviceListCommandOptions) => {
+      await runDeviceListCommand(options)
+    })
+
+  deviceCommand
+    .command('open [url]')
+    .description('Open a URL, port, or deep link on a connected device')
+    .option('--device <serial>', 'Target a device serial')
+    .option('--no-forward', 'Do not create an adb reverse for localhost URLs')
+    .option('-v, --verbose', 'Explain URL and port forwarding decisions')
+    .action(async (url: string | undefined, options: Omit<DeviceOpenCommandOptions, 'url'>) => {
+      await runDeviceOpenCommand({ ...options, url })
     })
 
   app

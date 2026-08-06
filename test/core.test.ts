@@ -137,6 +137,7 @@ describe('app', () => {
   test('registers commands', () => {
     expect(createApp().commands.map((command) => command.name())).toEqual([
       'create',
+      'device',
       'doctor',
       'emulator',
       'localnet',
