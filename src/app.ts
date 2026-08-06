@@ -1,5 +1,11 @@
-import { Command, InvalidArgumentError } from 'commander'
+import { Command, InvalidArgumentError, Option } from 'commander'
 import { readPackageMetadata } from './core/data-access/package-metadata.ts'
+import {
+  checkForNewerVersion,
+  type VersionCheckOptions,
+  type VersionCheckResult,
+} from './core/data-access/version-check.ts'
+import { formatUpdateWarning } from './core/ui/core-ui-update-warning.ts'
 import {
   type CreateCommandOptions,
   MINIMAL_TEMPLATE_NAME,
@@ -60,6 +66,7 @@ import {
 } from './templates/templates-feature-index.ts'
 
 export type AppOptions = {
+  checkForNewerVersion?: (options: VersionCheckOptions) => Promise<VersionCheckResult | undefined>
   runDeviceList?: (options: DeviceListCommandOptions) => Promise<void>
   runDeviceOpen?: (options: DeviceOpenCommandOptions) => Promise<void>
   runEmulatorCreate?: (options: EmulatorCreateCommandOptions) => Promise<void>
@@ -85,6 +92,7 @@ export type AppOptions = {
 }
 
 export function createApp({
+  checkForNewerVersion: checkForNewerVersionFn = checkForNewerVersion,
   runDeviceList: runDeviceListCommand = runDeviceList,
   runDeviceOpen: runDeviceOpenCommand = runDeviceOpen,
   runEmulatorCreate: runEmulatorCreateCommand = runEmulatorCreate,
@@ -116,7 +124,22 @@ export function createApp({
     .name(metadata.name)
     .description(metadata.description)
     .showHelpAfterError()
+    .option('--skip-version-check', 'Skip checking for CLI updates')
     .version(metadata.version)
+
+  // Runs before every subcommand action. checkForNewerVersion resolves undefined instead of
+  // throwing or hanging, so an unreachable registry can never break or stall a command.
+  app.hook('preAction', async (_thisCommand, actionCommand) => {
+    if (isSkipVersionCheckSet(actionCommand)) {
+      return
+    }
+
+    const update = await checkForNewerVersionFn({ metadata })
+
+    if (update) {
+      console.error(formatUpdateWarning(update))
+    }
+  })
 
   app
     .command('create [projectName]')
@@ -363,7 +386,31 @@ export function createApp({
       await runTemplatesSyncCommand({ ...options, target })
     })
 
+  // Positional options are enabled, so an option is only accepted where it is declared. The
+  // root declaration alone would reject `solana-mobile emulator list --skip-version-check`;
+  // every subcommand accepts the flag too, hidden there to keep help output focused.
+  for (const command of listCommandsRecursively(app)) {
+    command.addOption(new Option('--skip-version-check', 'Skip checking for CLI updates').hideHelp())
+  }
+
   return app
+}
+
+function isSkipVersionCheckSet(command: Command): boolean {
+  for (let current: Command | null = command; current; current = current.parent) {
+    if (current.opts().skipVersionCheck) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function* listCommandsRecursively(command: Command): Generator<Command> {
+  for (const child of command.commands) {
+    yield child
+    yield* listCommandsRecursively(child)
+  }
 }
 
 interface LocalnetCommandLineOptions {

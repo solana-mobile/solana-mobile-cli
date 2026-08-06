@@ -30,9 +30,15 @@ const PACKAGE_RUNNERS: PackageRunner[] = [
   { command: 'yarn dlx', matches: (s) => Boolean(s.userAgent?.startsWith('yarn/')) && !s.lifecycleEvent },
 ]
 
-function detectPackageRunner(environment: NodeJS.ProcessEnv): string | undefined {
+export function detectPackageRunner(environment: NodeJS.ProcessEnv): string | undefined {
   const signals = readInvocationSignals(environment)
   return PACKAGE_RUNNERS.find(({ matches }) => matches(signals))?.command
+}
+
+export function isPackageManagerInvocation(environment: NodeJS.ProcessEnv): boolean {
+  const { lifecycleEvent, npmCommand, userAgent } = readInvocationSignals(environment)
+
+  return Boolean(lifecycleEvent || npmCommand || userAgent)
 }
 
 export function formatCliCommand(command: string, environment: NodeJS.ProcessEnv = process.env): string {
