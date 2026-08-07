@@ -4,7 +4,7 @@ import type { AdbDependencies } from '../device/data-access/device-types.ts'
 import { listAdbDevices } from '../device/data-access/list-adb-devices.ts'
 import { collectExistingReverses } from './data-access/apply-forwards.ts'
 import { inspectLocalnetContainer } from './data-access/docker-engine.ts'
-import { localnetRpcUrl, resolveLocalnetForContainer } from './data-access/localnet-engines.ts'
+import { localnetRpcUrl, redactDatasourceLabel, resolveLocalnetForContainer } from './data-access/localnet-engines.ts'
 import type { LocalnetStatusCommandOptions, LocalnetStatusReport } from './data-access/localnet-types.ts'
 import { renderLocalnetStatus } from './ui/localnet-ui-render-forwards.ts'
 
@@ -27,7 +27,8 @@ export async function createLocalnetStatusReport(
   const existing = await collectExistingReverses(selected, { runCommand })
 
   return {
-    container,
+    // The report is printed (table or --json), so a custom RPC URL's credentials are left out of it.
+    container: { ...container, datasource: container.datasource && redactDatasourceLabel(container.datasource) },
     devices: selected.map(({ serial, state }) => ({
       forwards: (existing.get(serial) ?? []).filter(({ devicePort }) =>
         localnet.ports.some((port) => port.canonical === devicePort),

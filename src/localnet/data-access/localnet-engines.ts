@@ -1,7 +1,10 @@
 import type {
   ContainerStatus,
+  LocalnetDatasource,
+  LocalnetDatasourceOptions,
   LocalnetEngine,
   LocalnetEngineId,
+  LocalnetNetworkId,
   LocalnetPortName,
   LocalnetPortOptions,
   ResolvedLocalnet,
@@ -16,7 +19,20 @@ export const LOCALNET_CONTAINER_NAME = 'solana-mobile-localnet'
  */
 export const LOCALNET_ENGINE_LABEL = 'localnet.engine'
 
+/**
+ * Records the datasource a container forks from, so a later `start` can tell whether the running
+ * validator already serves what was asked for, and `status` can report it.
+ */
+export const LOCALNET_DATASOURCE_LABEL = 'localnet.datasource'
+
 export const DEFAULT_LOCALNET_ENGINE: LocalnetEngineId = 'surfpool'
+
+/** solana-test-validator takes cluster monikers, where mainnet is spelled mainnet-beta. */
+const TEST_VALIDATOR_URL_MONIKERS: Record<LocalnetNetworkId, string> = {
+  devnet: 'devnet',
+  mainnet: 'mainnet-beta',
+  testnet: 'testnet',
+}
 
 /**
  * Container contracts mirror `@beeman/testcontainers`, which is the known-good configuration for both
@@ -25,7 +41,7 @@ export const DEFAULT_LOCALNET_ENGINE: LocalnetEngineId = 'surfpool'
  */
 export const LOCALNET_ENGINES: Record<LocalnetEngineId, LocalnetEngine> = {
   surfpool: {
-    buildArgs: ({ rpc, studio, ws }) => [
+    buildArgs: ({ rpc, studio, ws }, datasource) => [
       'start',
       '--no-tui',
       '--host',
@@ -33,7 +49,13 @@ export const LOCALNET_ENGINES: Record<LocalnetEngineId, LocalnetEngine> = {
       ...(rpc ? ['--port', String(rpc)] : []),
       ...(ws ? ['--ws-port', String(ws)] : []),
       ...(studio ? ['--studio-port', String(studio)] : []),
-      '--offline',
+      // Surfpool fetches any missing account from the datasource on first access; without one it must be
+      // told to run offline or it refuses to start.
+      ...(datasource
+        ? datasource.kind === 'rpc-url'
+          ? ['--rpc-url', datasource.rpcUrl]
+          : ['--network', datasource.network]
+        : ['--offline']),
     ],
     environment: { SURFPOOL_NETWORK_HOST: '0.0.0.0' },
     id: 'surfpool',
@@ -45,8 +67,18 @@ export const LOCALNET_ENGINES: Record<LocalnetEngineId, LocalnetEngine> = {
     ],
   },
   'test-validator': {
-    // The image starts the validator through its own entrypoint; no arguments needed.
-    buildArgs: () => [],
+    // Without a datasource the image starts the validator through its own default command. With one, the
+    // arguments replace that command entirely, so the binary has to be repeated in front of the flags.
+    buildArgs: (_ports, datasource) =>
+      datasource
+        ? [
+            'solana-test-validator',
+            '--url',
+            datasource.kind === 'rpc-url' ? datasource.rpcUrl : TEST_VALIDATOR_URL_MONIKERS[datasource.network],
+            ...datasource.clone.flatMap((address) => ['--clone', address]),
+            ...datasource.cloneUpgradeableProgram.flatMap((address) => ['--clone-upgradeable-program', address]),
+          ]
+        : [],
     environment: {},
     id: 'test-validator',
     image: 'beeman/solana-test-validator:latest',
@@ -70,6 +102,94 @@ export function parseLocalnetEngineId(value: string): LocalnetEngineId {
   throw new Error(`Unknown localnet engine: ${value}. Expected one of: surfpool, test-validator`)
 }
 
+export function isLocalnetNetworkId(value: string | undefined): value is LocalnetNetworkId {
+  return value === 'devnet' || value === 'mainnet' || value === 'testnet'
+}
+
+export function parseLocalnetNetworkId(value: string): LocalnetNetworkId {
+  if (isLocalnetNetworkId(value)) {
+    return value
+  }
+
+  throw new Error(`Unknown network: ${value}. Expected one of: devnet, mainnet, testnet`)
+}
+
+/**
+ * An empty or non-http(s) value would otherwise read as "no datasource" and start the validator offline.
+ * Whitespace is rejected because the datasource label is space-separated: redaction could not find the URL's end.
+ */
+export function parseLocalnetRpcUrl(value: string): string {
+  const trimmed = value.trim()
+
+  if (/\s/.test(trimmed) || !URL.canParse(trimmed) || !['http:', 'https:'].includes(new URL(trimmed).protocol)) {
+    throw new Error('Invalid RPC URL. Expected an http:// or https:// URL.')
+  }
+
+  return trimmed
+}
+
+/**
+ * Validates the datasource options against the engine that will run them. This has to happen after the
+ * engine is resolved — the engine may be inherited from a running container rather than passed — which is
+ * why the CLI boundary cannot do it.
+ */
+export function resolveLocalnetDatasource(
+  engineId: LocalnetEngineId,
+  { clone = [], cloneUpgradeableProgram = [], network, rpcUrl }: LocalnetDatasourceOptions = {},
+): LocalnetDatasource | undefined {
+  if (network && rpcUrl) {
+    throw new Error('--network and --rpc-url both name a datasource. Pass one or the other.')
+  }
+
+  const hasClones = clone.length > 0 || cloneUpgradeableProgram.length > 0
+
+  if (hasClones && engineId === 'surfpool') {
+    throw new Error(
+      'surfpool does not take --clone: it fetches accounts from the datasource on demand. Drop the clone flags, or use --engine test-validator.',
+    )
+  }
+
+  if (hasClones && !network && !rpcUrl) {
+    throw new Error('--clone needs a cluster to clone from. Add --network or --rpc-url.')
+  }
+
+  if (rpcUrl) {
+    return { clone, cloneUpgradeableProgram, kind: 'rpc-url', rpcUrl }
+  }
+
+  return network ? { clone, cloneUpgradeableProgram, kind: 'network', network } : undefined
+}
+
+/**
+ * Canonical one-line form of a datasource, written to the container label and compared on reuse. Clone
+ * lists are sorted so the same request always serializes identically, whatever order the flags came in.
+ */
+export function datasourceLabel(datasource: LocalnetDatasource): string {
+  return [
+    datasource.kind === 'network' ? `network=${datasource.network}` : `rpc-url=${datasource.rpcUrl}`,
+    ...[...datasource.clone].sort().map((address) => `clone=${address}`),
+    ...[...datasource.cloneUpgradeableProgram].sort().map((address) => `clone-upgradeable-program=${address}`),
+  ].join(' ')
+}
+
+/**
+ * The datasource label for display. RPC providers put API keys in the URL's path or query, so an
+ * `rpc-url=` entry keeps only its scheme and host. The raw label stays on the container: it is what reuse
+ * compares against, and the same URL is already in the container's command.
+ */
+export function redactDatasourceLabel(label: string): string {
+  return label.replace(/(^|\s)rpc-url=(\S+)/, (_match, lead: string, value: string) => {
+    if (!URL.canParse(value)) {
+      return `${lead}rpc-url=<redacted>`
+    }
+
+    const url = new URL(value)
+    const hasSecrets = url.username || url.password || url.pathname !== '/' || url.search || url.hash
+
+    return `${lead}rpc-url=${url.protocol}//${url.host}${hasSecrets ? '/…' : ''}`
+  })
+}
+
 /** Maps a port to the command line option that overrides its host side. */
 export const PORT_OPTION_KEYS: Record<LocalnetPortName, keyof LocalnetPortOptions> = {
   rpc: 'port',
@@ -83,11 +203,16 @@ export const PORT_OPTION_KEYS: Record<LocalnetPortName, keyof LocalnetPortOption
  */
 export function resolveLocalnet(
   engineId: LocalnetEngineId = DEFAULT_LOCALNET_ENGINE,
-  { image, ports = {} }: { image?: string; ports?: LocalnetPortOptions } = {},
+  {
+    datasource,
+    image,
+    ports = {},
+  }: { datasource?: LocalnetDatasourceOptions; image?: string; ports?: LocalnetPortOptions } = {},
 ): ResolvedLocalnet {
   const engine = LOCALNET_ENGINES[engineId]
 
   return {
+    datasource: resolveLocalnetDatasource(engineId, datasource),
     engine,
     image: image ?? engine.image,
     ports: engine.ports.map(({ canonical, name }) => ({
@@ -131,6 +256,10 @@ export function engineConflictMessage(running: LocalnetEngineId, requested: Loca
   return `A ${running} container is already running. Stop it with \`solana-mobile localnet stop\` before using ${requested}.`
 }
 
+export function datasourceConflictMessage(running: string | undefined, requested: string): string {
+  return `The running container was started ${running ? `with datasource ${redactDatasourceLabel(running)}` : 'offline'}. Stop it with \`solana-mobile localnet stop\` before starting with ${redactDatasourceLabel(requested)}.`
+}
+
 /**
  * Resolves what a lifecycle command should act on, in precedence order: explicit options, then whatever
  * the container was actually started with, then defaults.
@@ -144,7 +273,7 @@ export function engineConflictMessage(running: LocalnetEngineId, requested: Loca
  */
 export function resolveLocalnetForContainer(
   container: ContainerStatus,
-  options: { engine?: LocalnetEngineId; image?: string } & LocalnetPortOptions = {},
+  options: { engine?: LocalnetEngineId; image?: string } & LocalnetDatasourceOptions & LocalnetPortOptions = {},
   { runningOnly = false }: { runningOnly?: boolean } = {},
 ): ResolvedLocalnet {
   // Only a *running* container conflicts: reusing it as a different engine would advertise endpoints it
@@ -155,8 +284,17 @@ export function resolveLocalnetForContainer(
 
   const inherit = runningOnly ? container.running : container.status !== undefined
   const engineId = options.engine ?? (inherit ? container.engine : undefined) ?? DEFAULT_LOCALNET_ENGINE
+  const datasource = resolveLocalnetDatasource(engineId, options)
+
+  // Same shape as the engine conflict: reusing the running container cannot change where it forks from,
+  // so a datasource it was not started with would be silently ignored — say so instead. No datasource
+  // requested means reuse whatever is running, exactly like an omitted `--engine`.
+  if (datasource && container.running && container.datasource !== datasourceLabel(datasource)) {
+    throw new Error(datasourceConflictMessage(container.datasource, datasourceLabel(datasource)))
+  }
 
   return resolveLocalnet(engineId, {
+    datasource: options,
     image: options.image,
     ports: mergePortOptions(options, inherit ? publishedPortOptions(engineId, container.publishedPorts) : undefined),
   })

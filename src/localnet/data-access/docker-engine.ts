@@ -1,8 +1,10 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
 import {
   canonicalPorts,
+  datasourceLabel,
   isLocalnetEngineId,
   LOCALNET_CONTAINER_NAME,
+  LOCALNET_DATASOURCE_LABEL,
   LOCALNET_ENGINE_LABEL,
 } from './localnet-engines.ts'
 import type { ContainerStatus, DockerDependencies, ResolvedLocalnet } from './localnet-types.ts'
@@ -10,11 +12,15 @@ import type { ContainerStatus, DockerDependencies, ResolvedLocalnet } from './lo
 // `HostConfig.PortBindings` rather than `NetworkSettings.Ports`: the former is the configuration the
 // container was created with and survives the container being stopped, which is exactly when `status`
 // and `stop` still need to know which host ports the session used.
+//
+// The datasource label goes last because it can contain the separator (an RPC URL may carry `|`); the
+// parser rejoins everything after the port bindings, which are JSON that never contains one.
 const INSPECT_FORMAT = [
   '{{.State.Status}}',
   '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}',
   `{{index .Config.Labels "${LOCALNET_ENGINE_LABEL}"}}`,
   '{{json .HostConfig.PortBindings}}',
+  `{{index .Config.Labels "${LOCALNET_DATASOURCE_LABEL}"}}`,
 ].join('|')
 
 export async function isDockerRunning({ runCommand = runExecutable }: DockerDependencies = {}): Promise<boolean> {
@@ -40,9 +46,12 @@ export async function inspectLocalnetContainer({
 }
 
 export function parseContainerStatus(output: string, containerName = LOCALNET_CONTAINER_NAME): ContainerStatus {
-  const [status, health, label, bindings] = output.trim().split('|')
+  const [status, health, label, bindings, ...datasourceParts] = output.trim().split('|')
+  const datasource = datasourceParts.join('|')
 
   return {
+    // `<no value>` is what docker prints for a missing label on older engines; empty means unset too.
+    datasource: datasource && datasource !== '<no value>' ? datasource : undefined,
     // Only a recognized engine id counts, so `engine` doubles as proof that we created this container.
     engine: isLocalnetEngineId(label) ? label : undefined,
     health: health && health !== 'none' ? health : undefined,
@@ -101,7 +110,7 @@ export function buildDockerRunCommand(
   localnet: ResolvedLocalnet,
   { containerName = LOCALNET_CONTAINER_NAME }: { containerName?: string } = {},
 ): [string, ...string[]] {
-  const { engine, image, ports } = localnet
+  const { datasource, engine, image, ports } = localnet
 
   return [
     'docker',
@@ -111,6 +120,7 @@ export function buildDockerRunCommand(
     containerName,
     '--label',
     `${LOCALNET_ENGINE_LABEL}=${engine.id}`,
+    ...(datasource ? ['--label', `${LOCALNET_DATASOURCE_LABEL}=${datasourceLabel(datasource)}`] : []),
     ...(engine.privileged ? ['--privileged'] : []),
     ...Object.entries(engine.environment).flatMap(([key, value]) => ['--env', `${key}=${value}`]),
     // Bound to loopback explicitly: `host:container` publishes on every interface, which would put the
@@ -118,7 +128,7 @@ export function buildDockerRunCommand(
     // `adb reverse` reaches them through the adb server on this host, so loopback is all that is needed.
     ...ports.flatMap(({ canonical, host }) => ['--publish', `127.0.0.1:${host}:${canonical}`]),
     image,
-    ...engine.buildArgs(canonicalPorts(localnet)),
+    ...engine.buildArgs(canonicalPorts(localnet), datasource),
   ]
 }
 

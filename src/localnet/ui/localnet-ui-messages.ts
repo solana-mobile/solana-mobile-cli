@@ -16,6 +16,13 @@ export function attachedMessage(rpcUrl: string, version?: string): string {
 }
 
 /**
+ * Shown when a datasource was asked for but an already-running validator answered first. Attaching cannot
+ * change where that validator forks from, and pretending it did would be worse than saying so.
+ */
+export const DATASOURCE_NOT_APPLIED_ON_ATTACH_MESSAGE =
+  'Datasource options only apply when localnet starts the validator. The running one is used as-is.'
+
+/**
  * Shown instead of removing a container that carries no management label. Naming the command keeps the
  * user unblocked without us destroying something we did not create.
  */
