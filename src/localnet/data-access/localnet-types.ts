@@ -2,6 +2,23 @@ import type { CommandRunner } from '../../core/data-access/command-types.ts'
 
 export type LocalnetEngineId = 'surfpool' | 'test-validator'
 
+export type LocalnetNetworkId = 'devnet' | 'mainnet' | 'testnet'
+
+/**
+ * Remote cluster the validator forks from, lazily (surfpool) or by cloning up front (test-validator).
+ * Discriminated on `kind` so every consumer handles both sources; no datasource means an offline chain.
+ */
+export type LocalnetDatasource =
+  | { clone: string[]; cloneUpgradeableProgram: string[]; kind: 'network'; network: LocalnetNetworkId }
+  | { clone: string[]; cloneUpgradeableProgram: string[]; kind: 'rpc-url'; rpcUrl: string }
+
+export interface LocalnetDatasourceOptions {
+  clone?: string[]
+  cloneUpgradeableProgram?: string[]
+  network?: LocalnetNetworkId
+  rpcUrl?: string
+}
+
 /** Ports we know how to forward. Each engine declares the subset it serves. */
 export type LocalnetPortName = 'rpc' | 'studio' | 'ws'
 
@@ -16,7 +33,7 @@ export interface LocalnetEnginePort {
 
 export interface LocalnetEngine {
   /** Container command arguments, built from the canonical (container-side) ports. */
-  buildArgs: (ports: Record<LocalnetPortName, number | undefined>) => string[]
+  buildArgs: (ports: Record<LocalnetPortName, number | undefined>, datasource?: LocalnetDatasource) => string[]
   environment: Record<string, string>
   id: LocalnetEngineId
   image: string
@@ -34,6 +51,7 @@ export interface ResolvedLocalnetPort {
 }
 
 export interface ResolvedLocalnet {
+  datasource?: LocalnetDatasource
   engine: LocalnetEngine
   image: string
   ports: ResolvedLocalnetPort[]
@@ -64,6 +82,11 @@ export interface ForwardAction {
 }
 
 export interface ContainerStatus {
+  /**
+   * The datasource label the container was started with, so a later `start` can tell whether the running
+   * validator already forks from what was asked for. Absent means offline (or a pre-datasource container).
+   */
+  datasource?: string
   /**
    * Read back from the container label, so `status`/`stop` work without repeating `--engine`. Only set
    * for a recognized engine id, which also makes it the proof that we created this container.
@@ -140,7 +163,7 @@ export interface LocalnetLogsCommandOptions {
   lines?: number
 }
 
-export interface LocalnetStartCommandOptions extends LocalnetPortOptions {
+export interface LocalnetStartCommandOptions extends LocalnetDatasourceOptions, LocalnetPortOptions {
   detach?: boolean
   devices?: string[]
   engine?: LocalnetEngineId

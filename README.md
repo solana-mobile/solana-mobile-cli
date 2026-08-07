@@ -132,6 +132,9 @@ npx solana-mobile localnet start --detach
 # Use solana-test-validator instead of surfpool
 npx solana-mobile localnet start --engine test-validator
 
+# Fork from a public cluster instead of starting an empty chain
+npx solana-mobile localnet start --network devnet
+
 # Forward an already-running validator without starting one
 npx solana-mobile localnet forward
 
@@ -151,6 +154,28 @@ npx solana-mobile localnet stop
 
 The default engine is [surfpool](https://github.com/txtx/surfpool); `--engine test-validator` runs
 `solana-test-validator` instead.
+
+Without a datasource the validator starts as an empty, isolated chain. `--network devnet|mainnet|testnet` forks from
+a public cluster instead, and `--rpc-url` does the same from any RPC endpoint. With surfpool, any account your app
+touches — programs included, at their original addresses — is fetched from that cluster on first access, and the
+validator reports the cluster's genesis hash. `solana-test-validator` does not fetch lazily, so there the datasource
+is cloned from up front: name each account with `--clone` and each upgradeable program with
+`--clone-upgradeable-program` (both repeatable).
+
+```bash
+# Local surfpool that lazily mirrors devnet
+npx solana-mobile localnet start --network devnet
+
+# Fork from a custom endpoint instead of a public cluster
+npx solana-mobile localnet start --rpc-url https://my-rpc.example.com
+
+# test-validator with a devnet program and account cloned in
+npx solana-mobile localnet start --engine test-validator --network devnet \
+  --clone-upgradeable-program <PROGRAM_ADDRESS> --clone <ACCOUNT_ADDRESS>
+```
+
+The datasource is recorded on the container, so `localnet status` reports it and a later `localnet start` refuses a
+datasource the running validator was not started with, instead of silently ignoring it.
 
 `localnet` checks the RPC port before it starts anything. If a validator already answers there — a native build you
 are running yourself, or one you started by hand — it attaches to that instead of starting a container, and reports

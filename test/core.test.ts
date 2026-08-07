@@ -411,11 +411,15 @@ describe('app', () => {
 
     expect(startOptions).toEqual([
       {
+        clone: [],
+        cloneUpgradeableProgram: [],
         detach: undefined,
         devices: [],
         engine: undefined,
         image: undefined,
+        network: undefined,
         port: undefined,
+        rpcUrl: undefined,
         studioPort: undefined,
         watch: true,
         wsPort: undefined,
@@ -435,6 +439,54 @@ describe('app', () => {
 
     expect(startOptions[0]?.watch).toBe(false)
     expect(startOptions[0]?.detach).toBe(true)
+  })
+
+  test('passes datasource flags through to localnet start', async () => {
+    const startOptions: LocalnetStartCommandOptions[] = []
+    const app = createApp({
+      runLocalnetStart: async (options) => {
+        startOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'localnet',
+      'start',
+      '--engine',
+      'test-validator',
+      '--network',
+      'devnet',
+      '--clone',
+      'AddrOne',
+      '--clone',
+      'AddrTwo',
+      '--clone-upgradeable-program',
+      'ProgramOne',
+    ])
+
+    expect(startOptions[0]).toMatchObject({
+      clone: ['AddrOne', 'AddrTwo'],
+      cloneUpgradeableProgram: ['ProgramOne'],
+      engine: 'test-validator',
+      network: 'devnet',
+    })
+  })
+
+  test('rejects an unknown network at the command line', async () => {
+    const app = createApp({ runLocalnetStart: async () => {} })
+
+    app.exitOverride()
+    app.configureOutput({ writeErr: () => {}, writeOut: () => {} })
+    app.commands
+      .find((command) => command.name() === 'localnet')
+      ?.exitOverride()
+      .configureOutput({ writeErr: () => {}, writeOut: () => {} })
+
+    expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--network', 'mainnet-beta'])).rejects.toThrow(
+      'Unknown network: mainnet-beta',
+    )
   })
 
   test('accepts localnet options on either side of the subcommand', async () => {

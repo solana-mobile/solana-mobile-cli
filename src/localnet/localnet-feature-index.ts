@@ -1,9 +1,10 @@
-export { parseLocalnetEngineId } from './data-access/localnet-engines.ts'
+export { parseLocalnetEngineId, parseLocalnetNetworkId } from './data-access/localnet-engines.ts'
 export type {
   LocalnetCheckCommandOptions,
   LocalnetEngineId,
   LocalnetForwardCommandOptions,
   LocalnetLogsCommandOptions,
+  LocalnetNetworkId,
   LocalnetStartCommandOptions,
   LocalnetStatusCommandOptions,
   LocalnetStopCommandOptions,
