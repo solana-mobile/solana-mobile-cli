@@ -46,10 +46,12 @@ import {
   type LocalnetEngineId,
   type LocalnetForwardCommandOptions,
   type LocalnetLogsCommandOptions,
+  type LocalnetNetworkId,
   type LocalnetStartCommandOptions,
   type LocalnetStatusCommandOptions,
   type LocalnetStopCommandOptions,
   parseLocalnetEngineId,
+  parseLocalnetNetworkId,
   runLocalnetCheck,
   runLocalnetForward,
   runLocalnetLogs,
@@ -321,23 +323,17 @@ export function createApp({
       await runEmulatorStopCommand({ nameOrSerial })
     })
 
-  const localnetCommand = withLocalnetTargetOptions(
+  const localnetCommand = withLocalnetStartOptions(
     app.command('localnet').description('Run a local Solana validator for emulators and devices'),
-  )
-    .option('--detach', 'Leave the validator running in the background')
-    .option('--image <image>', 'Container image to run')
-    .option('--no-watch', 'Do not re-apply port forwards when devices change')
-    .action(async (_options: LocalnetCommandLineOptions, command: Command) => {
-      await runLocalnetStartCommand(toLocalnetStartOptions(localnetOptions(command)))
-    })
+  ).action(async (_options: LocalnetCommandLineOptions, command: Command) => {
+    await runLocalnetStartCommand(toLocalnetStartOptions(localnetOptions(command)))
+  })
 
-  withLocalnetTargetOptions(localnetCommand.command('start').description('Start the validator and forward its ports'))
-    .option('--detach', 'Leave the validator running in the background')
-    .option('--image <image>', 'Container image to run')
-    .option('--no-watch', 'Do not re-apply port forwards when devices change')
-    .action(async (_options: LocalnetCommandLineOptions, command: Command) => {
-      await runLocalnetStartCommand(toLocalnetStartOptions(localnetOptions(command)))
-    })
+  withLocalnetStartOptions(
+    localnetCommand.command('start').description('Start the validator and forward its ports'),
+  ).action(async (_options: LocalnetCommandLineOptions, command: Command) => {
+    await runLocalnetStartCommand(toLocalnetStartOptions(localnetOptions(command)))
+  })
 
   withLocalnetTargetOptions(
     localnetCommand.command('check').description('Verify the validator is reachable from every device'),
@@ -442,20 +438,24 @@ function* listCommandsRecursively(command: Command): Generator<Command> {
 }
 
 interface LocalnetCommandLineOptions {
+  clone?: string[]
+  cloneUpgradeableProgram?: string[]
   detach?: boolean
   device?: string[]
   engine?: LocalnetEngineId
   image?: string
   json?: boolean
   lines?: number
+  network?: LocalnetNetworkId
   open?: boolean
   port?: number
+  rpcUrl?: string
   studioPort?: number
   watch?: boolean
   wsPort?: number
 }
 
-function collectDevice(value: string, previous: string[] = []) {
+function collectRepeatable(value: string, previous: string[] = []) {
   return [...previous, value]
 }
 
@@ -496,11 +496,33 @@ function localnetOptions(command: Command): LocalnetCommandLineOptions {
 
 function withLocalnetTargetOptions(command: Command): Command {
   return command
-    .option('--device <serial>', 'Target a device serial (repeatable)', collectDevice, [])
+    .option('--device <serial>', 'Target a device serial (repeatable)', collectRepeatable, [])
     .option('--engine <engine>', 'Validator engine: surfpool or test-validator', parseEngineOption)
     .option('--port <port>', 'Host port for the RPC endpoint', parseIntegerOption)
     .option('--studio-port <port>', 'Host port for the Studio UI', parseIntegerOption)
     .option('--ws-port <port>', 'Host port for the WebSocket endpoint', parseIntegerOption)
+}
+
+/** Flags that only make sense when a validator may be started: `localnet` itself and `localnet start`. */
+function withLocalnetStartOptions(command: Command): Command {
+  return withLocalnetTargetOptions(command)
+    .option(
+      '--clone <address>',
+      'Clone an account from the datasource (repeatable, test-validator only)',
+      collectRepeatable,
+      [],
+    )
+    .option(
+      '--clone-upgradeable-program <address>',
+      'Clone an upgradeable program from the datasource (repeatable, test-validator only)',
+      collectRepeatable,
+      [],
+    )
+    .option('--detach', 'Leave the validator running in the background')
+    .option('--image <image>', 'Container image to run')
+    .option('--network <network>', 'Fork from a public cluster: devnet, mainnet, or testnet', parseNetworkOption)
+    .option('--no-watch', 'Do not re-apply port forwards when devices change')
+    .option('--rpc-url <url>', 'Fork from a custom datasource RPC URL')
 }
 
 function toLocalnetTargetOptions(options: LocalnetCommandLineOptions) {
@@ -514,7 +536,16 @@ function toLocalnetTargetOptions(options: LocalnetCommandLineOptions) {
 }
 
 function toLocalnetStartOptions(options: LocalnetCommandLineOptions): LocalnetStartCommandOptions {
-  return { ...toLocalnetTargetOptions(options), detach: options.detach, image: options.image, watch: options.watch }
+  return {
+    ...toLocalnetTargetOptions(options),
+    clone: options.clone,
+    cloneUpgradeableProgram: options.cloneUpgradeableProgram,
+    detach: options.detach,
+    image: options.image,
+    network: options.network,
+    rpcUrl: options.rpcUrl,
+    watch: options.watch,
+  }
 }
 
 export async function runApp(argv = process.argv, options: AppOptions = {}) {
@@ -536,6 +567,14 @@ export async function runApp(argv = process.argv, options: AppOptions = {}) {
 function parseEngineOption(value: string): LocalnetEngineId {
   try {
     return parseLocalnetEngineId(value)
+  } catch (error) {
+    throw new InvalidArgumentError(error instanceof Error ? error.message : String(error))
+  }
+}
+
+function parseNetworkOption(value: string): LocalnetNetworkId {
+  try {
+    return parseLocalnetNetworkId(value)
   } catch (error) {
     throw new InvalidArgumentError(error instanceof Error ? error.message : String(error))
   }

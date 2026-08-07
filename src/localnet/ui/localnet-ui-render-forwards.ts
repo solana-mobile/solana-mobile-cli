@@ -48,6 +48,8 @@ export function renderLocalnetStatus({ container, devices, engine, rpcUrl }: Loc
           : (container.status ?? 'not created'),
         item: `container ${container.name}`,
       },
+      // Only a container we created can be known to be offline; anything else is simply unknown.
+      ...(container.engine ? [{ detail: container.datasource ?? 'offline', item: 'datasource' }] : []),
       { detail: engine, item: 'engine' },
       { detail: rpcUrl, item: 'rpc url' },
     ],

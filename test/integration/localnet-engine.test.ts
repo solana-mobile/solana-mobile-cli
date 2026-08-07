@@ -7,7 +7,7 @@ import {
 } from '../../src/localnet/data-access/docker-engine.ts'
 import { localnetRpcUrl, resolveLocalnet } from '../../src/localnet/data-access/localnet-engines.ts'
 import type { LocalnetEngineId } from '../../src/localnet/data-access/localnet-types.ts'
-import { waitForRpc } from '../../src/localnet/data-access/probe-rpc.ts'
+import { defaultJsonRpcFetcher, waitForRpc } from '../../src/localnet/data-access/probe-rpc.ts'
 
 /**
  * Boots each engine for real. The unit tests assert the exact `docker run` argv, which only proves we
@@ -65,5 +65,48 @@ describe.each(ENGINES)('localnet engine %s', (engineId) => {
 
     expect(status.running).toBe(true)
     expect(status.engine).toBe(engineId)
+  }, 300_000)
+})
+
+describe('localnet surfpool datasource', () => {
+  beforeEach(async () => {
+    await removeLocalnetContainer({ containerName }).catch(() => {})
+  })
+
+  afterEach(async () => {
+    await removeLocalnetContainer({ containerName }).catch(() => {})
+  })
+
+  test('forks from devnet and reports its genesis hash', async () => {
+    // The unit tests prove we pass `--network devnet`; this proves surfpool still accepts it and actually
+    // forks — the genesis hash is devnet's, not a fresh chain's. Needs the public devnet RPC reachable.
+    const localnet = resolveLocalnet('surfpool', { datasource: { network: 'devnet' }, ports })
+
+    await startLocalnetContainer(localnet, { containerName })
+
+    const rpcUrl = localnetRpcUrl(localnet)
+    const rpc = await waitForRpc(rpcUrl, {
+      onAttempt: async () => {
+        const status = await inspectLocalnetContainer({ containerName })
+
+        if (status.status && !status.running) {
+          const logs = await readLocalnetContainerLogs({ lines: 50 }, { containerName }).catch(() => '')
+
+          throw new Error(`surfpool container exited (${status.status})\n${logs}`)
+        }
+      },
+      timeoutMs: 180_000,
+    })
+
+    expect(rpc.ok).toBe(true)
+
+    const genesis = (await defaultJsonRpcFetcher(rpcUrl, 'getGenesisHash')) as { result?: string }
+
+    expect(genesis.result).toBe('EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG')
+
+    // The datasource label is what a later `start` compares against; prove a real round trip through Docker.
+    const status = await inspectLocalnetContainer({ containerName })
+
+    expect(status.datasource).toBe('network=devnet')
   }, 300_000)
 })
