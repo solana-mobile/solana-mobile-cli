@@ -50,7 +50,12 @@ import {
   runLocalnetStatus,
   runLocalnetStop,
 } from './localnet/localnet-feature-index.ts'
-import { runTemplatesCheck, type TemplatesCheckCommandOptions } from './templates/templates-feature-index.ts'
+import {
+  runTemplatesCheck,
+  runTemplatesSync,
+  type TemplatesCheckCommandOptions,
+  type TemplatesSyncCommandOptions,
+} from './templates/templates-feature-index.ts'
 
 export type AppOptions = {
   runDeviceList?: (options: DeviceListCommandOptions) => Promise<void>
@@ -73,6 +78,7 @@ export type AppOptions = {
   runCreate?: (options: CreateCommandOptions) => Promise<void>
   runDoctor?: (options: DoctorCommandOptions) => Promise<number>
   runTemplatesCheck?: (options: TemplatesCheckCommandOptions) => Promise<void>
+  runTemplatesSync?: (options: TemplatesSyncCommandOptions) => Promise<void>
 }
 
 export function createApp({
@@ -96,6 +102,7 @@ export function createApp({
   runCreate: runCreateCommand = runCreate,
   runDoctor: runDoctorCommand = runDoctor,
   runTemplatesCheck: runTemplatesCheckCommand = runTemplatesCheck,
+  runTemplatesSync: runTemplatesSyncCommand = runTemplatesSync,
 }: AppOptions = {}) {
   const metadata = readPackageMetadata()
   const app = new Command()
@@ -332,6 +339,16 @@ export function createApp({
     .option('--root <path>', 'Template repository root')
     .action(async (options: TemplatesCheckCommandOptions) => {
       await runTemplatesCheckCommand(options)
+    })
+
+  templatesCommand
+    .command('sync <target>')
+    .description('Sync git-tracked templates to another template repository')
+    .option('--dry-run', 'Show what would change without writing')
+    .option('--force', 'Sync even if the target has uncommitted changes')
+    .option('--root <path>', 'Template repository root')
+    .action(async (target: string, options: Omit<TemplatesSyncCommandOptions, 'target'>) => {
+      await runTemplatesSyncCommand({ ...options, target })
     })
 
   return app

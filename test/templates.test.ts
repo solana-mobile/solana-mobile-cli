@@ -1,14 +1,32 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import {
+  applyTemplateSync,
   checkTemplateRepository,
+  planTemplateSync,
   renderTemplateRepository,
   runTemplatesCheck,
+  runTemplatesSync,
   TemplateGroupConfigSchema,
   TemplatePackageJsonSchema,
   TemplateRepositoryPackageJsonSchema,
+  type TrackedFile,
 } from '../src/templates.ts'
 
 const fixtureRoot = new URL('./fixtures/template-repository/', import.meta.url)
@@ -319,6 +337,378 @@ describe('templates check command', () => {
   })
 })
 
+const repositoryManifest = JSON.stringify({
+  repokit: { groups: [{ description: 'Mobile templates', name: 'Mobile', path: 'mobile' }] },
+  repository: { name: 'example/templates' },
+})
+
+describe('templates sync', () => {
+  test('plans add, update, remove, and unchanged actions', async () => {
+    const source = createRepo({
+      'mobile/added/package.json': '{ "name": "added" }',
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/updated/package.json': '{ "name": "updated" }',
+      'package.json': repositoryManifest,
+    })
+    const target = createRepo({
+      'mobile/example/node_modules/dep.js': 'ignored',
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/stale/package.json': '{ "name": "stale" }',
+      'mobile/updated/package.json': '{ "name": "old" }',
+      'package.json': repositoryManifest,
+    })
+
+    const plan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
+
+    expect(plan.groups).toEqual(['mobile'])
+    expect(plan.actions.map(({ action, path }) => `${action} ${path}`)).toEqual([
+      'add mobile/added',
+      'unchanged mobile/example',
+      'remove mobile/stale',
+      'update mobile/updated',
+    ])
+  })
+
+  test('plans an update when the target tracks a file the source no longer ships', async () => {
+    const source = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'package.json': repositoryManifest,
+    })
+    const target = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/example/removed-upstream.ts': 'stale',
+      'package.json': repositoryManifest,
+    })
+
+    const plan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
+
+    expect(plan.actions).toEqual([
+      {
+        action: 'update',
+        files: [{ executable: false, path: 'mobile/example/package.json', symlink: false }],
+        ignored: [],
+        path: 'mobile/example',
+      },
+    ])
+  })
+
+  test('preserves gitignored target files when updating a template', async () => {
+    const source = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'package.json': repositoryManifest,
+    })
+    const target = createRepo({
+      'mobile/example/.env': 'SECRET=1',
+      'mobile/example/package.json': '{ "name": "old" }',
+      'package.json': repositoryManifest,
+    })
+
+    applyTemplateSync(source, target, await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles }))
+
+    expect(readFileSync(join(target, 'mobile/example/package.json'), 'utf8')).toBe('{ "name": "example" }')
+    // The gitignored local env file is not restorable from git, so the sync must not delete it.
+    expect(readFileSync(join(target, 'mobile/example/.env'), 'utf8')).toBe('SECRET=1')
+  })
+
+  test('keeps a removed template directory that still contains gitignored files', async () => {
+    const source = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'package.json': repositoryManifest,
+    })
+    const target = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/stale/.env': 'SECRET=1',
+      'mobile/stale/package.json': '{ "name": "stale" }',
+      'package.json': repositoryManifest,
+    })
+
+    const kept = applyTemplateSync(
+      source,
+      target,
+      await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles }),
+    )
+
+    expect(kept).toEqual(['mobile/stale'])
+    expect(readFileSync(join(target, 'mobile/stale/.env'), 'utf8')).toBe('SECRET=1')
+    expect(existsSync(join(target, 'mobile/stale/package.json'))).toBe(false)
+  })
+
+  test('preserves symlinks instead of dereferencing them', async () => {
+    const source = createRepo({
+      '.env': 'SECRET=1',
+      'mobile/example/package.json': '{ "name": "example" }',
+      'package.json': repositoryManifest,
+    })
+    symlinkSync('../../.env', join(source, 'mobile/example/env-link'))
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    applyTemplateSync(source, target, await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles }))
+
+    const linkPath = join(target, 'mobile/example/env-link')
+
+    expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(linkPath)).toBe('../../.env')
+    // The gitignored secret behind the link stays behind; the target only receives the (dangling) link.
+    expect(existsSync(join(target, '.env'))).toBe(false)
+
+    const plan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
+
+    expect(plan.actions.map(({ action }) => action)).toEqual(['unchanged'])
+  })
+
+  test('preserves the executable bit and treats a mode change as an update', async () => {
+    const source = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/example/script.sh': '#!/bin/sh\n',
+      'package.json': repositoryManifest,
+    })
+    chmodSync(join(source, 'mobile/example/script.sh'), 0o755)
+    const target = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/example/script.sh': '#!/bin/sh\n',
+      'package.json': repositoryManifest,
+    })
+
+    // Same bytes everywhere, but the target lost the executable bit.
+    const plan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
+
+    expect(plan.actions.map(({ action, path }) => `${action} ${path}`)).toEqual(['update mobile/example'])
+
+    applyTemplateSync(source, target, plan)
+
+    expect(lstatSync(join(target, 'mobile/example/script.sh')).mode & 0o111).toBe(0o111)
+
+    const replan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
+
+    expect(replan.actions.map(({ action }) => action)).toEqual(['unchanged'])
+  })
+
+  test('throws when the target does not declare the group', async () => {
+    const source = createRepo({
+      'mobile/example/package.json': '{ "name": "example" }',
+      'package.json': repositoryManifest,
+    })
+    const target = createRepo({
+      'package.json': JSON.stringify({
+        repokit: { groups: [{ description: 'Web templates', name: 'Web', path: 'web' }] },
+        repository: { name: 'example/other-templates' },
+      }),
+    })
+
+    expect(planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
+      'Target repository does not declare a group with path "mobile"',
+    )
+  })
+
+  test('throws when the source has no tracked files in a group', async () => {
+    const source = createRepo({ 'package.json': repositoryManifest })
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    expect(planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
+      'Source repository has no tracked files under "mobile"',
+    )
+  })
+
+  test('throws when source and target are the same directory', async () => {
+    const root = createRepo({ 'package.json': repositoryManifest })
+
+    expect(planTemplateSync(root, root, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
+      'Source and target repositories are the same directory',
+    )
+  })
+
+  test('applies the plan as a mirror of the tracked source files', async () => {
+    const source = createRepo({
+      'mobile/added/package.json': '{ "name": "added" }',
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/updated/package.json': '{ "name": "updated" }',
+      'package.json': repositoryManifest,
+    })
+    const target = createRepo({
+      'mobile/example/node_modules/dep.js': 'ignored',
+      'mobile/example/package.json': '{ "name": "example" }',
+      'mobile/stale/package.json': '{ "name": "stale" }',
+      'mobile/updated/dropped.ts': 'stale',
+      'mobile/updated/package.json': '{ "name": "old" }',
+      'package.json': repositoryManifest,
+    })
+
+    applyTemplateSync(source, target, await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles }))
+
+    expect(readFileSync(join(target, 'mobile/added/package.json'), 'utf8')).toBe('{ "name": "added" }')
+    expect(readFileSync(join(target, 'mobile/updated/package.json'), 'utf8')).toBe('{ "name": "updated" }')
+    expect(existsSync(join(target, 'mobile/stale'))).toBe(false)
+    expect(existsSync(join(target, 'mobile/updated/dropped.ts'))).toBe(false)
+    // Unchanged templates are left alone, so untracked files like installed dependencies survive the sync.
+    expect(existsSync(join(target, 'mobile/example/node_modules/dep.js'))).toBe(true)
+  })
+})
+
+describe('templates sync command', () => {
+  test('syncs the source templates and reports a summary', async () => {
+    const outros: string[] = []
+    const source = copyFixture()
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    await runTemplatesSync(
+      { root: source, target },
+      {
+        cancel: () => {},
+        info: () => {},
+        intro: () => {},
+        listChanges: async () => [],
+        listTrackedFiles,
+        outro: (message) => outros.push(message),
+      },
+    )
+
+    expect(existsSync(join(target, 'mobile/example/package.json'))).toBe(true)
+    expect(outros.join('\n')).toContain('1 added, 0 updated, 0 removed, 0 unchanged')
+  })
+
+  test('refuses to overwrite a dirty target without --force', async () => {
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const source = copyFixture()
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    try {
+      await runTemplatesSync(
+        { root: source, target },
+        {
+          cancel: (message) => cancellations.push(message),
+          info: () => {},
+          intro: () => {},
+          listChanges: async () => [' M mobile/example/local-change.ts'],
+          listTrackedFiles,
+          outro: () => {},
+        },
+      )
+
+      expect(cancellations.join('\n')).toContain('uncommitted changes')
+      expect(existsSync(join(target, 'mobile'))).toBe(false)
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('overwrites a dirty target with --force', async () => {
+    const source = copyFixture()
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    await runTemplatesSync(
+      { force: true, root: source, target },
+      {
+        cancel: () => {},
+        info: () => {},
+        intro: () => {},
+        listChanges: async () => {
+          throw new Error('must not be called')
+        },
+        listTrackedFiles,
+        outro: () => {},
+      },
+    )
+
+    expect(existsSync(join(target, 'mobile/example/package.json'))).toBe(true)
+  })
+
+  test('writes nothing on a dry run', async () => {
+    const outros: string[] = []
+    const source = copyFixture()
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    await runTemplatesSync(
+      { dryRun: true, root: source, target },
+      {
+        cancel: () => {},
+        info: () => {},
+        intro: () => {},
+        listTrackedFiles,
+        outro: (message) => outros.push(message),
+      },
+    )
+
+    expect(existsSync(join(target, 'mobile'))).toBe(false)
+    expect(outros.join('\n')).toContain('Dry run')
+  })
+
+  test('reports an up to date target without writing', async () => {
+    const outros: string[] = []
+    const source = copyFixture()
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    cpSync(join(source, 'mobile'), join(target, 'mobile'), { recursive: true })
+
+    await runTemplatesSync(
+      { root: source, target },
+      {
+        cancel: () => {},
+        info: () => {},
+        intro: () => {},
+        listTrackedFiles,
+        outro: (message) => outros.push(message),
+      },
+    )
+
+    expect(outros).toEqual(['Target repository is up to date with mobile'])
+  })
+
+  test('fails when the source repository check fails', async () => {
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const source = copyFixture()
+    const target = createRepo({ 'package.json': repositoryManifest })
+
+    unlinkSync(join(source, 'mobile/example/og-image.png'))
+
+    try {
+      await runTemplatesSync(
+        { root: source, target },
+        {
+          cancel: (message) => cancellations.push(message),
+          info: () => {},
+          intro: () => {},
+          listTrackedFiles,
+          outro: () => {},
+        },
+      )
+
+      expect(cancellations).toEqual(['Source repository check failed:\n- mobile/example/og-image.png is missing'])
+      expect(existsSync(join(target, 'mobile'))).toBe(false)
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('fails when planning throws', async () => {
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const source = copyFixture()
+    const target = createRepo({})
+
+    try {
+      await runTemplatesSync(
+        { root: source, target },
+        {
+          cancel: (message) => cancellations.push(message),
+          info: () => {},
+          intro: () => {},
+          listTrackedFiles,
+          outro: () => {},
+        },
+      )
+
+      expect(cancellations.join('\n')).toContain('Target repository has no package.json')
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+})
+
 function copyFixture() {
   const root = mkdtempSync(join(tmpdir(), 'solana-mobile-templates-'))
   temporaryRoots.push(root)
@@ -339,6 +729,76 @@ function createPng(width: number, height: number) {
   image.writeUInt32BE(width, 16)
   image.writeUInt32BE(height, 20)
   return image
+}
+
+function createRepo(files: Record<string, string>) {
+  const root = mkdtempSync(join(tmpdir(), 'solana-mobile-templates-sync-'))
+  temporaryRoots.push(root)
+
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(join(root, dirname(path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+
+  return root
+}
+
+/** Stands in for git's ignore listing by treating dependency directories and env files as ignored. */
+async function listIgnoredFiles(root: string, path: string): Promise<string[]> {
+  const ignored: string[] = []
+
+  const walk = (relative: string) => {
+    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
+      const entryPath = `${relative}/${entry.name}`
+
+      if (entry.name === 'node_modules' || entry.name === '.env') {
+        ignored.push(entryPath)
+      } else if (entry.isDirectory()) {
+        walk(entryPath)
+      }
+    }
+  }
+
+  const stats = lstatSync(join(root, path), { throwIfNoEntry: false })
+
+  if (stats?.isDirectory()) {
+    walk(path)
+  }
+
+  return ignored.sort((left, right) => left.localeCompare(right))
+}
+
+/** Stands in for `git ls-files` by treating everything on disk as tracked, except dependency directories. */
+async function listTrackedFiles(root: string, path: string): Promise<TrackedFile[]> {
+  const files: TrackedFile[] = []
+
+  const walk = (relative: string) => {
+    for (const entry of readdirSync(join(root, relative), { withFileTypes: true })) {
+      const entryPath = `${relative}/${entry.name}`
+
+      if (entry.name === 'node_modules') {
+        continue
+      }
+
+      if (entry.isDirectory()) {
+        walk(entryPath)
+      } else {
+        const stats = lstatSync(join(root, entryPath))
+
+        files.push({
+          executable: !stats.isSymbolicLink() && (stats.mode & 0o100) !== 0,
+          path: entryPath,
+          symlink: stats.isSymbolicLink(),
+        })
+      }
+    }
+  }
+
+  if (existsSync(join(root, path))) {
+    walk(path)
+  }
+
+  return files.sort((left, right) => left.path.localeCompare(right.path))
 }
 
 function writeManifest(root: string, update: (manifest: Record<string, unknown>) => void) {

@@ -272,6 +272,30 @@ incorrectly sized `og-image.png` files, duplicate template names, and generated 
 `TEMPLATES.md`, and `templates.json`) that are missing or out of date. Artifacts are only compared once the templates
 themselves are valid. Nothing is written; problems produce exit code `1`, which makes it usable as a CI check.
 
+### Sync a template repository
+
+```bash
+# Preview a sync from the current directory into another template repository
+npx solana-mobile templates sync ../solana-foundation-templates --dry-run
+
+# Sync the templates
+npx solana-mobile templates sync ../solana-foundation-templates
+
+# Sync from a template repository somewhere else
+npx solana-mobile templates sync ../solana-foundation-templates --root ../solana-mobile-templates
+```
+
+The command mirrors every group declared in the source repository's `repokit.groups` into the target repository.
+Groups are matched by `path`; the target must declare a matching group, and groups that only exist in the target are
+left untouched. Within a synced group the source is authoritative: templates are added, updated, and removed so the
+target matches the source exactly. Only files tracked by git in the source are ever copied, so gitignored files like
+dependencies and build output never cross over — symlinks are recreated as symlinks and executable bits are
+preserved. Files that are gitignored in the target (local env files, installed dependencies) are never deleted: they
+survive template updates, and a removed template whose directory still contains ignored files is kept with a warning
+instead of being deleted. The source repository must pass `templates check` before anything is written, the target
+must have no uncommitted changes under the synced groups (override with `--force`), and generated artifacts have to
+be regenerated in the target afterwards because template ids embed the repository name.
+
 ### Show command help
 
 ```bash

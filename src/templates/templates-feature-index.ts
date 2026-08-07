@@ -1,4 +1,12 @@
 export type {
+  TemplateSyncAction,
+  TemplateSyncActionKind,
+  TemplateSyncDependencies,
+  TemplateSyncPlan,
+  TrackedFile,
+} from './data-access/sync-template-repository.ts'
+export { applyTemplateSync, listWorkTreeChanges, planTemplateSync } from './data-access/sync-template-repository.ts'
+export type {
   TemplateMetadata,
   TemplateRepository,
   TemplateRepositoryArtifact,
@@ -17,3 +25,4 @@ export {
   TemplateRepositoryPackageJsonSchema,
 } from './data-access/template-repository-schema.ts'
 export { runTemplatesCheck, type TemplatesCheckCommandOptions } from './templates-feature-check.ts'
+export { runTemplatesSync, type TemplatesSyncCommandOptions } from './templates-feature-sync.ts'
