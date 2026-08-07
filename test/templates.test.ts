@@ -15,18 +15,20 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import {
   applyTemplateSync,
   checkTemplateRepository,
   planTemplateSync,
   renderTemplateRepository,
   runTemplatesCheck,
+  runTemplatesGenerate,
   runTemplatesSync,
   TemplateGroupConfigSchema,
   TemplatePackageJsonSchema,
   TemplateRepositoryPackageJsonSchema,
   type TrackedFile,
+  writeTemplateRepository,
 } from '../src/templates.ts'
 
 const fixtureRoot = new URL('./fixtures/template-repository/', import.meta.url)
@@ -239,6 +241,108 @@ describe('templates', () => {
 
     expect(checkTemplateRepository(root).issues.join('\n')).toContain('templates.json: invalid')
   })
+
+  test('writes missing artifacts and their parent directories', () => {
+    const root = copyFixture()
+
+    rmSync(join(root, '.github'), { recursive: true })
+    unlinkSync(join(root, 'templates.json'))
+
+    expect(writeTemplateRepository(root)).toEqual([
+      { path: '.github/workflows/templates.json', status: 'written' },
+      { path: 'TEMPLATES.md', status: 'unchanged' },
+      { path: 'templates.json', status: 'written' },
+    ])
+
+    for (const artifact of expectedArtifacts) {
+      expect(readFileSync(join(root, artifact.path), 'utf8')).toBe(artifact.content)
+    }
+  })
+
+  test('rewrites stale artifacts', () => {
+    const root = copyFixture()
+    const markdownPath = join(root, 'TEMPLATES.md')
+
+    writeFileSync(markdownPath, 'stale\n')
+
+    expect(writeTemplateRepository(root)).toContainEqual({ path: 'TEMPLATES.md', status: 'written' })
+    expect(readFileSync(markdownPath, 'utf8')).not.toBe('stale\n')
+  })
+
+  test('leaves up to date artifacts unchanged', () => {
+    expect(writeTemplateRepository(copyFixture())).toEqual([
+      { path: '.github/workflows/templates.json', status: 'unchanged' },
+      { path: 'TEMPLATES.md', status: 'unchanged' },
+      { path: 'templates.json', status: 'unchanged' },
+    ])
+  })
+
+  test('throws before writing when the repository is invalid', () => {
+    const root = copyFixture()
+    const markdownPath = join(root, 'TEMPLATES.md')
+
+    unlinkSync(join(root, 'mobile/example/og-image.png'))
+    writeFileSync(markdownPath, 'stale\n')
+
+    expect(() => writeTemplateRepository(root)).toThrow('mobile/example/og-image.png is missing')
+    expect(readFileSync(markdownPath, 'utf8')).toBe('stale\n')
+  })
+
+  test('refuses to write through a dangling artifact symlink', () => {
+    const root = copyFixture()
+    const outsidePath = join(root, '..', `${basename(root)}-victim.json`)
+
+    unlinkSync(join(root, 'templates.json'))
+    symlinkSync(outsidePath, join(root, 'templates.json'))
+
+    expect(() => writeTemplateRepository(root)).toThrow(
+      'Refusing to write template artifacts:\n- templates.json is a symbolic link',
+    )
+    expect(existsSync(outsidePath)).toBe(false)
+  })
+
+  test('refuses to write through a symlinked artifact file without touching its target', () => {
+    const root = copyFixture()
+    const outsidePath = join(root, '..', `${basename(root)}-victim.md`)
+
+    writeFileSync(outsidePath, 'victim\n')
+    temporaryRoots.push(outsidePath)
+    unlinkSync(join(root, 'TEMPLATES.md'))
+    symlinkSync(outsidePath, join(root, 'TEMPLATES.md'))
+
+    expect(() => writeTemplateRepository(root)).toThrow('TEMPLATES.md is a symbolic link')
+    expect(readFileSync(outsidePath, 'utf8')).toBe('victim\n')
+  })
+
+  test('refuses to write through a symlinked parent directory before writing anything', () => {
+    const root = copyFixture()
+    const outsideDirectory = join(root, '..', `${basename(root)}-victim-directory`)
+
+    mkdirSync(outsideDirectory, { recursive: true })
+    temporaryRoots.push(outsideDirectory)
+    rmSync(join(root, '.github'), { recursive: true })
+    symlinkSync(outsideDirectory, join(root, '.github'))
+    unlinkSync(join(root, 'templates.json'))
+
+    expect(() => writeTemplateRepository(root)).toThrow(
+      'Refusing to write template artifacts:\n- .github is a symbolic link',
+    )
+    expect(readdirSync(outsideDirectory)).toEqual([])
+    expect(existsSync(join(root, 'templates.json'))).toBe(false)
+  })
+
+  test('reports symlinked artifacts when checking', () => {
+    const root = copyFixture()
+    const markdownPath = join(root, 'TEMPLATES.md')
+    const markdownTargetPath = join(root, 'TEMPLATES-target.md')
+
+    // The target has the expected content, so only the symlink itself can fail the check.
+    cpSync(markdownPath, markdownTargetPath)
+    unlinkSync(markdownPath)
+    symlinkSync(markdownTargetPath, markdownPath)
+
+    expect(checkTemplateRepository(root).issues).toEqual(['TEMPLATES.md is a symbolic link'])
+  })
 })
 
 describe('templates check command', () => {
@@ -330,6 +434,106 @@ describe('templates check command', () => {
         },
         intro: () => {},
         outro: () => {},
+      },
+    )
+
+    expect(roots).toEqual([process.cwd()])
+  })
+})
+
+describe('templates generate command', () => {
+  test('reports every written artifact', async () => {
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const logs: string[] = []
+    const outros: string[] = []
+    const root = copyFixture()
+
+    unlinkSync(join(root, 'templates.json'))
+
+    try {
+      await runTemplatesGenerate(
+        { root },
+        {
+          cancel: (message) => cancellations.push(message),
+          intro: () => {},
+          log: (message) => logs.push(message),
+          outro: (message) => outros.push(message),
+        },
+      )
+
+      expect(logs).toEqual([
+        '.github/workflows/templates.json: unchanged',
+        'TEMPLATES.md: unchanged',
+        'templates.json: written',
+      ])
+      expect(outros).toEqual(['Generated 1 of 3 artifacts'])
+      expect(cancellations).toEqual([])
+      expect(process.exitCode ?? 0).toBe(0)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('reports up to date artifacts', async () => {
+    const outros: string[] = []
+
+    await runTemplatesGenerate(
+      { root: copyFixture() },
+      {
+        cancel: () => {},
+        intro: () => {},
+        log: () => {},
+        outro: (message) => outros.push(message),
+      },
+    )
+
+    expect(outros).toEqual(['Template artifacts are up to date'])
+  })
+
+  test('fails when the repository is invalid', async () => {
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const outros: string[] = []
+    const root = copyFixture()
+
+    unlinkSync(join(root, 'mobile/example/og-image.png'))
+
+    try {
+      await runTemplatesGenerate(
+        { root },
+        {
+          cancel: (message) => cancellations.push(message),
+          intro: () => {},
+          log: () => {},
+          outro: (message) => outros.push(message),
+        },
+      )
+
+      expect(cancellations).toEqual([
+        'Error: Template repository is invalid:\n- mobile/example/og-image.png is missing',
+      ])
+      expect(outros).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('generates in the current directory by default', async () => {
+    const roots: string[] = []
+
+    await runTemplatesGenerate(
+      {},
+      {
+        cancel: () => {},
+        intro: () => {},
+        log: () => {},
+        outro: () => {},
+        writeRepository: (root) => {
+          roots.push(root)
+          return []
+        },
       },
     )
 

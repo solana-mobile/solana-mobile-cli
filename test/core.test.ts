@@ -23,7 +23,10 @@ import type {
   LocalnetStatusCommandOptions,
   LocalnetStopCommandOptions,
 } from '../src/localnet/localnet-feature-index.ts'
-import type { TemplatesCheckCommandOptions } from '../src/templates/templates-feature-index.ts'
+import type {
+  TemplatesCheckCommandOptions,
+  TemplatesGenerateCommandOptions,
+} from '../src/templates/templates-feature-index.ts'
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   description: string
@@ -390,7 +393,7 @@ describe('app', () => {
   test('registers templates subcommands', () => {
     const templatesCommand = createApp().commands.find((command) => command.name() === 'templates')
 
-    expect(templatesCommand?.commands.map((command) => command.name())).toEqual(['check', 'sync'])
+    expect(templatesCommand?.commands.map((command) => command.name())).toEqual(['check', 'generate', 'sync'])
   })
 
   test('does not delegate templates command to check', async () => {
@@ -423,6 +426,19 @@ describe('app', () => {
     await app.parseAsync(['node', 'solana-mobile', 'templates', 'check', '--root', '/repo'])
 
     expect(templatesCheckOptions).toEqual([{ root: '/repo' }])
+  })
+
+  test('delegates templates generate command options', async () => {
+    const templatesGenerateOptions: TemplatesGenerateCommandOptions[] = []
+    const app = createApp({
+      runTemplatesGenerate: async (options) => {
+        templatesGenerateOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'templates', 'generate', '--root', '/repo'])
+
+    expect(templatesGenerateOptions).toEqual([{ root: '/repo' }])
   })
 
   test('does not delegate emulator images command to list', async () => {
