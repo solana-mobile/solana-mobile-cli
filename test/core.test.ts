@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import type { CreateAppArgs, TemplateJsonTemplate } from 'create-solana-dapp'
 import { createApp, runApp } from '../src/app.ts'
 import { readPackageMetadata } from '../src/core/data-access/package-metadata.ts'
+import { checkForNewerVersion, isVersionGreater } from '../src/core/data-access/version-check.ts'
+import { formatUpdateWarning } from '../src/core/ui/core-ui-update-warning.ts'
 import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
 import { readPackageString } from '../src/core/util/read-package-string.ts'
 import type { CreateCommandOptions, CreateSolanaDappApi } from '../src/create/create-feature-index.ts'
@@ -128,6 +130,140 @@ describe('core', () => {
   })
 })
 
+describe('version check', () => {
+  const metadata = { description: 'CLI for Solana Mobile development.', name: 'solana-mobile', version: '0.1.3' }
+
+  test('compares release versions', () => {
+    expect(isVersionGreater('0.2.0', '0.1.3')).toBe(true)
+    expect(isVersionGreater('1.0.0', '0.9.9')).toBe(true)
+    expect(isVersionGreater('0.1.4', '0.1.3')).toBe(true)
+    expect(isVersionGreater('0.1.3', '0.1.3')).toBe(false)
+    expect(isVersionGreater('0.1.2', '0.1.3')).toBe(false)
+    expect(isVersionGreater('not-a-version', '0.1.3')).toBe(false)
+    expect(isVersionGreater('0.2.0', 'not-a-version')).toBe(false)
+  })
+
+  test('reports a newer published version', async () => {
+    const result = await checkForNewerVersion({
+      env: {},
+      fetchLatestVersion: async () => '0.2.0',
+      isTty: true,
+      metadata,
+    })
+
+    expect(result).toEqual({ current: '0.1.3', latest: '0.2.0' })
+  })
+
+  test('reports nothing when up to date', async () => {
+    const result = await checkForNewerVersion({
+      env: {},
+      fetchLatestVersion: async () => '0.1.3',
+      isTty: true,
+      metadata,
+    })
+
+    expect(result).toBeUndefined()
+  })
+
+  test('reports nothing when the registry is unreachable', async () => {
+    const result = await checkForNewerVersion({
+      env: {},
+      fetchLatestVersion: async () => undefined,
+      isTty: true,
+      metadata,
+    })
+
+    expect(result).toBeUndefined()
+  })
+
+  test('skips in CI, tests, opt-out, and without a terminal', async () => {
+    let fetchCalled = false
+    const fetchLatestVersion = async () => {
+      fetchCalled = true
+      return '0.2.0'
+    }
+
+    expect(
+      await checkForNewerVersion({ env: { CI: 'true' }, fetchLatestVersion, isTty: true, metadata }),
+    ).toBeUndefined()
+    expect(
+      await checkForNewerVersion({ env: { NODE_ENV: 'test' }, fetchLatestVersion, isTty: true, metadata }),
+    ).toBeUndefined()
+    expect(
+      await checkForNewerVersion({
+        env: { SOLANA_MOBILE_SKIP_VERSION_CHECK: '1' },
+        fetchLatestVersion,
+        isTty: true,
+        metadata,
+      }),
+    ).toBeUndefined()
+    expect(await checkForNewerVersion({ env: {}, fetchLatestVersion, isTty: false, metadata })).toBeUndefined()
+    expect(fetchCalled).toBe(false)
+  })
+
+  test('does not skip when CI is explicitly disabled', async () => {
+    const result = await checkForNewerVersion({
+      env: { CI: 'false' },
+      fetchLatestVersion: async () => '0.2.0',
+      isTty: true,
+      metadata,
+    })
+
+    expect(result).toEqual({ current: '0.1.3', latest: '0.2.0' })
+  })
+
+  test('skips preview builds', async () => {
+    let fetchCalled = false
+    const result = await checkForNewerVersion({
+      env: {},
+      fetchLatestVersion: async () => {
+        fetchCalled = true
+        return '0.2.0'
+      },
+      isTty: true,
+      metadata: { ...metadata, version: '0.0.0-canary-20260804175003' },
+    })
+
+    expect(result).toBeUndefined()
+    expect(fetchCalled).toBe(false)
+  })
+
+  test('formats the update warning for a global install', () => {
+    expect(formatUpdateWarning({ current: '0.1.3', latest: '0.2.0' }, {})).toBe(
+      [
+        'A new version of solana-mobile is available: 0.1.3 → 0.2.0',
+        'Run npm install -g solana-mobile@latest to update.',
+        'Pass --skip-version-check to skip this check.',
+      ].join('\n'),
+    )
+  })
+
+  test('formats the update warning for a package runner', () => {
+    const warning = formatUpdateWarning(
+      { current: '0.1.3', latest: '0.2.0' },
+      { npm_command: 'exec', npm_lifecycle_event: 'npx' },
+    )
+
+    expect(warning).toContain('Run npx solana-mobile@latest to use the latest version.')
+  })
+
+  test('formats the update warning for a project dependency', () => {
+    // A package script does not match a package runner; a global install would not update the
+    // dependency actually being executed.
+    const warning = formatUpdateWarning(
+      { current: '0.1.3', latest: '0.2.0' },
+      {
+        npm_command: 'run-script',
+        npm_config_user_agent: 'pnpm/10.33.0 npm/? node/v24.5.0 darwin arm64',
+        npm_lifecycle_event: 'mobile',
+      },
+    )
+
+    expect(warning).toContain('Update the solana-mobile dependency in your project to get the latest version.')
+    expect(warning).not.toContain('npm install -g')
+  })
+})
+
 describe('app', () => {
   test('uses package metadata', () => {
     const app = createApp()
@@ -180,6 +316,58 @@ describe('app', () => {
     expect(output.join('')).toContain('templates')
     expect(createCalled).toBe(false)
     expect(doctorCalled).toBe(false)
+  })
+
+  test('warns before a command when a newer version is available', async () => {
+    const errors: string[] = []
+    const error = console.error
+
+    console.error = ((message: unknown) => {
+      errors.push(String(message))
+    }) as typeof console.error
+
+    try {
+      const app = createApp({
+        checkForNewerVersion: async () => ({ current: '0.1.3', latest: '0.2.0' }),
+        runEmulatorList: async () => {},
+      })
+
+      await app.parseAsync(['node', 'solana-mobile', 'emulator', 'list'])
+    } finally {
+      console.error = error
+    }
+
+    expect(errors.join('\n')).toContain('A new version of solana-mobile is available: 0.1.3 → 0.2.0')
+  })
+
+  test('skips the version check with --skip-version-check', async () => {
+    let checkCalled = false
+    const app = createApp({
+      checkForNewerVersion: async () => {
+        checkCalled = true
+        return undefined
+      },
+      runEmulatorList: async () => {},
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', '--skip-version-check', 'emulator', 'list'])
+
+    expect(checkCalled).toBe(false)
+  })
+
+  test('accepts --skip-version-check after the subcommand', async () => {
+    let checkCalled = false
+    const app = createApp({
+      checkForNewerVersion: async () => {
+        checkCalled = true
+        return undefined
+      },
+      runEmulatorImages: async () => {},
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'images', 'list', '--skip-version-check'])
+
+    expect(checkCalled).toBe(false)
   })
 
   test('registers emulator alias and subcommands', () => {
@@ -709,6 +897,7 @@ describe('app', () => {
       '--skip-init',
       '--skip-install',
       '-v, --verbose',
+      '--skip-version-check',
     ])
   })
 
