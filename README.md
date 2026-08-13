@@ -6,7 +6,7 @@ CLI for Solana Mobile development.
 
 - **Command help** — show available subcommands when no command is provided
 - **Create projects** — scaffold Solana Mobile apps from the template catalog
-- **Device helpers** — list connected devices and open URLs, dev servers, and deep links on them
+- **Device helpers** — list connected devices, install APKs, and open URLs, dev servers, and deep links on them
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, and stop local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
@@ -115,6 +115,35 @@ npx solana-mobile device open 3000 --no-forward
 
 # Explain URL and port forwarding decisions
 npx solana-mobile device open 3000 --verbose
+```
+
+### Install APKs
+
+Installs local APK files, every `.apk` in a directory, or known ecosystem APKs by name from the built-in
+catalog (currently `fakewallet`, the Mobile Wallet Adapter test wallet). Catalog downloads are cached, so
+repeat installs skip the network. Installs continue past failures and report a summary at the end.
+
+```bash
+# Pick catalog APKs from a list
+npx solana-mobile device install
+
+# Install a catalog APK by name
+npx solana-mobile device install fakewallet
+
+# Install local APK files and every .apk in a directory
+npx solana-mobile device install app.apk ./builds/
+
+# Install on every connected device
+npx solana-mobile device install fakewallet --all
+
+# Allow version downgrades and grant all runtime permissions
+npx solana-mobile device install app.apk --downgrade --grant
+
+# Re-download a catalog APK even when cached
+npx solana-mobile device install fakewallet --force
+
+# List the APKs available in the catalog
+npx solana-mobile device install --list
 ```
 
 ### Run a local validator

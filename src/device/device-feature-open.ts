@@ -6,11 +6,11 @@ import { createAdbReverse, listAdbReverses } from '../localnet/data-access/adb-r
 import { isUsableDevice } from '../localnet/data-access/list-adb-devices.ts'
 import type { AdbDependencies, AdbReverseEntry } from '../localnet/data-access/localnet-types.ts'
 import { openUrlOnDevice } from '../localnet/data-access/probe-device-port.ts'
-import type { ConnectedDevice, DeviceOpenCommandOptions } from './data-access/device-types.ts'
+import type { DeviceOpenCommandOptions } from './data-access/device-types.ts'
 import { connectedDeviceLabel, listConnectedDevices } from './data-access/list-connected-devices.ts'
 import { localhostPort, resolveOpenUrl } from './data-access/resolve-open-url.ts'
 import { NO_CONNECTED_DEVICES_MESSAGE } from './ui/device-ui-messages.ts'
-import { selectConnectedDeviceSerial } from './ui/device-ui-select-connected-device.ts'
+import { resolveTargetDevice } from './ui/device-ui-resolve-target-device.ts'
 import { selectOpenUrl } from './ui/device-ui-select-open-url.ts'
 
 interface RunDeviceOpenDependencies extends AdbDependencies, PromptDependencies {
@@ -112,37 +112,4 @@ export async function runDeviceOpen(
     showCancel(`${error}`)
     process.exitCode = 1
   }
-}
-
-/**
- * `undefined` covers three cases the caller can tell apart: no devices at all (report and fail), an
- * unknown `--device` serial (thrown instead, so it never returns), and a cancelled picker (exit quietly —
- * the prompt already printed the cancellation).
- */
-async function resolveTargetDevice(
-  devices: readonly ConnectedDevice[],
-  requestedSerial: string | undefined,
-  { runSelect }: PromptDependencies,
-): Promise<ConnectedDevice | undefined> {
-  if (requestedSerial) {
-    const requested = devices.find(({ serial }) => serial === requestedSerial)
-
-    if (!requested) {
-      throw new Error(`Device not connected or not ready: ${requestedSerial}`)
-    }
-
-    return requested
-  }
-
-  if (devices.length === 0) {
-    return undefined
-  }
-
-  if (devices.length === 1) {
-    return devices[0]
-  }
-
-  const serial = await selectConnectedDeviceSerial(devices, runSelect)
-
-  return devices.find((device) => device.serial === serial)
 }

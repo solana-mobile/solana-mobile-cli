@@ -1,11 +1,20 @@
 import { describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { CommandRunner } from '../src/core/data-access/command-types.ts'
+import { findApkCatalogEntry, githubReleaseDownloadUrl } from '../src/device/data-access/apk-catalog.ts'
+import { defaultDownloadFile, ensureApkDownloaded } from '../src/device/data-access/download-apk.ts'
+import { buildAdbInstallCommand, extractAdbInstallFailure, installApk } from '../src/device/data-access/install-apk.ts'
 import { listConnectedDevices } from '../src/device/data-access/list-connected-devices.ts'
+import { type PathKind, resolveApkArgs } from '../src/device/data-access/resolve-apk-installs.ts'
 import { localhostPort, resolveOpenUrl, validateOpenUrlInput } from '../src/device/data-access/resolve-open-url.ts'
+import { runDeviceInstall } from '../src/device/device-feature-install.ts'
 import { runDeviceOpen } from '../src/device/device-feature-open.ts'
 import { describeReverse } from '../src/device/ui/device-ui-messages.ts'
 import { selectOpenUrl } from '../src/device/ui/device-ui-select-open-url.ts'
-import type { SelectPrompt, TextPrompt } from '../src/emulator/ui/emulator-ui-prompt-types.ts'
+import type { MultiSelectPrompt, SelectPrompt, TextPrompt } from '../src/emulator/ui/emulator-ui-prompt-types.ts'
 
 /** Records every command so tests can assert on what adb was actually asked to do. */
 function recordingRunner(responses: (cmd: string[]) => string): { calls: string[][]; runCommand: CommandRunner } {
@@ -394,6 +403,400 @@ describe('runDeviceOpen', () => {
 
       expect(state.notes).toEqual(['No connected Android devices or emulators found'])
       expect(commandsMatching(calls, 'am')).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+})
+
+const FAKEWALLET_SHA256 = '8b19cd916d30da8c4b2410a074fa59feb680cfd5292a32a4830ffd4ceb5a8ac8'
+const FAKEWALLET_TAG = '@solana-mobile/wallet-adapter-mobile@2.2.9'
+const FAKEWALLET_URL = `https://github.com/solana-mobile/mobile-wallet-adapter/releases/download/${encodeURIComponent(FAKEWALLET_TAG)}/fakewallet-v1-release.apk`
+
+describe('apk-catalog', () => {
+  test('resolves fakewallet by name', () => {
+    expect(findApkCatalogEntry('fakewallet')?.source.asset).toBe('fakewallet-v1-release.apk')
+    expect(findApkCatalogEntry('nope')).toBeUndefined()
+  })
+
+  test('percent-encodes the release tag in the download URL', () => {
+    const source = findApkCatalogEntry('fakewallet')?.source
+
+    expect(source && githubReleaseDownloadUrl(source)).toBe(
+      'https://github.com/solana-mobile/mobile-wallet-adapter/releases/download/%40solana-mobile%2Fwallet-adapter-mobile%402.2.9/fakewallet-v1-release.apk',
+    )
+  })
+})
+
+describe('resolveApkArgs', () => {
+  const fakeFs = {
+    listDirectory: async () => ['b.apk', 'notes.txt', 'a.apk'],
+    pathKind: async (path: string): Promise<PathKind> =>
+      path === 'builds' || path === 'empty' ? 'directory' : path.endsWith('.apk') ? 'file' : undefined,
+  }
+
+  test('keeps an existing file as-is', async () => {
+    expect(await resolveApkArgs(['app.apk'], fakeFs)).toEqual([{ kind: 'local', path: 'app.apk' }])
+  })
+
+  test('expands a directory to its .apk files, sorted', async () => {
+    expect(await resolveApkArgs(['builds'], fakeFs)).toEqual([
+      { kind: 'local', path: 'builds/a.apk' },
+      { kind: 'local', path: 'builds/b.apk' },
+    ])
+  })
+
+  test('rejects a directory without .apk files', async () => {
+    const emptyFs = { ...fakeFs, listDirectory: async () => ['notes.txt'] }
+
+    expect(resolveApkArgs(['empty'], emptyFs)).rejects.toThrow('No .apk files found in directory: empty')
+  })
+
+  test('resolves a catalog name when nothing exists on disk', async () => {
+    const items = await resolveApkArgs(['fakewallet'], fakeFs)
+    const item = items[0]
+
+    expect(items).toHaveLength(1)
+    expect(item?.kind === 'catalog' && item.entry.name).toBe('fakewallet')
+  })
+
+  test('rejects an unknown name and lists the catalog', async () => {
+    expect(resolveApkArgs(['fakewalet'], fakeFs)).rejects.toThrow(
+      'Not a file, directory, or catalog APK: fakewalet\nCatalog APKs: fakewallet',
+    )
+  })
+})
+
+describe('installApk', () => {
+  test('builds the adb install command with -r and the optional flags', () => {
+    expect(buildAdbInstallCommand('SER1', 'app.apk')).toEqual(['adb', '-s', 'SER1', 'install', '-r', 'app.apk'])
+    expect(buildAdbInstallCommand('SER1', 'app.apk', { downgrade: true, grant: true })).toEqual([
+      'adb',
+      '-s',
+      'SER1',
+      'install',
+      '-r',
+      '-d',
+      '-g',
+      'app.apk',
+    ])
+  })
+
+  test('extracts the bare failure reason', () => {
+    expect(extractAdbInstallFailure('Performing Streamed Install\nFailure [INSTALL_FAILED_TEST]')).toBe(
+      'INSTALL_FAILED_TEST',
+    )
+    expect(extractAdbInstallFailure('Success')).toBeUndefined()
+  })
+
+  test('resolves on Success output', async () => {
+    const { runCommand } = recordingRunner(() => 'Performing Streamed Install\nSuccess\n')
+
+    expect(installApk('SER1', 'app.apk', {}, { runCommand })).resolves.toBeUndefined()
+  })
+
+  test('throws the reason when adb exits zero but reports Failure', async () => {
+    const { runCommand } = recordingRunner(() => 'Failure [INSTALL_FAILED_VERSION_DOWNGRADE]')
+
+    expect(installApk('SER1', 'app.apk', {}, { runCommand })).rejects.toThrow('INSTALL_FAILED_VERSION_DOWNGRADE')
+  })
+
+  test('throws the reason extracted from a rejecting adb', async () => {
+    const { runCommand } = recordingRunner(() => {
+      throw new Error('adb: failed to install app.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]')
+    })
+
+    expect(installApk('SER1', 'app.apk', {}, { runCommand })).rejects.toThrow('INSTALL_FAILED_UPDATE_INCOMPATIBLE')
+  })
+})
+
+describe('ensureApkDownloaded', () => {
+  const entry = {
+    description: 'Mobile Wallet Adapter test wallet',
+    name: 'fakewallet',
+    source: {
+      asset: 'fakewallet-v1-release.apk',
+      repo: 'solana-mobile/mobile-wallet-adapter',
+      sha256: FAKEWALLET_SHA256,
+      tag: FAKEWALLET_TAG,
+      type: 'github-release' as const,
+    },
+  }
+  const cachedPath = `/cache/fakewallet/${encodeURIComponent(FAKEWALLET_TAG)}/fakewallet-v1-release.apk`
+
+  test('skips the download when the pinned asset is cached', async () => {
+    const downloads: string[] = []
+    const result = await ensureApkDownloaded(
+      entry,
+      {},
+      {
+        downloadFile: async (url) => {
+          downloads.push(url)
+        },
+        fileExists: async () => true,
+        getCacheDirectory: () => '/cache',
+      },
+    )
+
+    expect(result).toEqual({ downloaded: false, path: cachedPath })
+    expect(downloads).toEqual([])
+  })
+
+  test('downloads into a tag-scoped cache path', async () => {
+    const downloads: (string | undefined)[][] = []
+    const result = await ensureApkDownloaded(
+      entry,
+      {},
+      {
+        downloadFile: async (url, destination, expectedSha256) => {
+          downloads.push([url, destination, expectedSha256])
+        },
+        fileExists: async () => false,
+        getCacheDirectory: () => '/cache',
+      },
+    )
+
+    expect(result).toEqual({ downloaded: true, path: cachedPath })
+    expect(downloads).toEqual([[FAKEWALLET_URL, cachedPath, FAKEWALLET_SHA256]])
+  })
+
+  test('re-downloads with force even when cached', async () => {
+    const downloads: string[] = []
+
+    await ensureApkDownloaded(
+      entry,
+      { force: true },
+      {
+        downloadFile: async (url) => {
+          downloads.push(url)
+        },
+        fileExists: async () => true,
+        getCacheDirectory: () => '/cache',
+      },
+    )
+
+    expect(downloads).toEqual([FAKEWALLET_URL])
+  })
+})
+
+describe('defaultDownloadFile', () => {
+  const apkBytes = Buffer.from('not really an apk')
+  const apkSha256 = createHash('sha256').update(apkBytes).digest('hex')
+
+  async function withStubbedFetch(fn: (destination: string) => Promise<void>) {
+    const originalFetch = globalThis.fetch
+    const directory = await mkdtemp(join(tmpdir(), 'solana-mobile-apk-test-'))
+
+    globalThis.fetch = (async () => new Response(apkBytes)) as unknown as typeof fetch
+
+    try {
+      await fn(join(directory, 'app.apk'))
+    } finally {
+      globalThis.fetch = originalFetch
+      await rm(directory, { force: true, recursive: true })
+    }
+  }
+
+  test('writes the file when the digest matches', async () => {
+    await withStubbedFetch(async (destination) => {
+      await defaultDownloadFile('https://example.com/app.apk', destination, apkSha256)
+
+      expect(await readFile(destination)).toEqual(apkBytes)
+    })
+  })
+
+  test('rejects a digest mismatch without creating a cache entry', async () => {
+    await withStubbedFetch(async (destination) => {
+      await expect(defaultDownloadFile('https://example.com/app.apk', destination, 'f'.repeat(64))).rejects.toThrow(
+        'SHA-256 verification',
+      )
+
+      await expect(stat(destination)).rejects.toThrow()
+      await expect(stat(`${destination}.partial`)).rejects.toThrow()
+    })
+  })
+})
+
+describe('runDeviceInstall', () => {
+  const singleDeviceWorld = (cmd: string[]): string => {
+    if (cmd[1] === 'devices') {
+      return 'List of devices attached\nSM02E4072816572\tdevice\n'
+    }
+
+    return defaultResponses(cmd)
+  }
+
+  function installDependencies(
+    runCommand: CommandRunner,
+    overrides: {
+      fileExists?: (path: string) => Promise<boolean>
+      runMultiselect?: MultiSelectPrompt
+      runSelect?: SelectPrompt
+    } = {},
+  ) {
+    const state: {
+      cancelled?: string
+      downloads: string[][]
+      logs: string[]
+      notes: string[]
+      outro?: string
+    } = { downloads: [], logs: [], notes: [] }
+
+    return {
+      dependencies: {
+        cancel: (message: string) => {
+          state.cancelled = message
+        },
+        downloadFile: async (url: string, destination: string) => {
+          state.downloads.push([url, destination])
+        },
+        fileExists: async () => false,
+        getCacheDirectory: () => '/cache',
+        intro: () => {},
+        log: (message: string) => {
+          state.logs.push(message)
+        },
+        note: (message: string, title?: string) => {
+          state.notes.push(title ?? message)
+        },
+        outro: (message: string) => {
+          state.outro = message
+        },
+        pathKind: async (path: string): Promise<PathKind> => (path.endsWith('.apk') ? 'file' : undefined),
+        runCommand,
+        ...overrides,
+      },
+      state,
+    }
+  }
+
+  test('installs local APKs on the only connected device', async () => {
+    const { calls, runCommand } = recordingRunner(singleDeviceWorld)
+    const { dependencies, state } = installDependencies(runCommand)
+
+    await runDeviceInstall({ apks: ['app.apk', 'other.apk'] }, dependencies)
+
+    expect(commandsMatching(calls, 'install')).toEqual([
+      ['adb', '-s', 'SM02E4072816572', 'install', '-r', 'app.apk'],
+      ['adb', '-s', 'SM02E4072816572', 'install', '-r', 'other.apk'],
+    ])
+    expect(state.outro).toBe('Installed 2 APKs')
+  })
+
+  test('downloads a catalog APK before installing it', async () => {
+    const { calls, runCommand } = recordingRunner(singleDeviceWorld)
+    const { dependencies, state } = installDependencies(runCommand)
+    const cachedPath = `/cache/fakewallet/${encodeURIComponent(FAKEWALLET_TAG)}/fakewallet-v1-release.apk`
+
+    await runDeviceInstall({ apks: ['fakewallet'] }, dependencies)
+
+    expect(state.downloads).toEqual([[FAKEWALLET_URL, cachedPath]])
+    expect(commandsMatching(calls, 'install').at(0)?.at(-1)).toBe(cachedPath)
+  })
+
+  test('uses the cached catalog APK when present', async () => {
+    const { runCommand } = recordingRunner(singleDeviceWorld)
+    const { dependencies, state } = installDependencies(runCommand, { fileExists: async () => true })
+
+    await runDeviceInstall({ apks: ['fakewallet'] }, dependencies)
+
+    expect(state.downloads).toEqual([])
+    expect(state.logs).toContain(`Using cached fakewallet (${FAKEWALLET_TAG})`)
+  })
+
+  test('prompts with the catalog when no arguments are given', async () => {
+    const { calls, runCommand } = recordingRunner(singleDeviceWorld)
+    const runMultiselect: MultiSelectPrompt = async () => ['fakewallet']
+    const { dependencies, state } = installDependencies(runCommand, { runMultiselect })
+
+    await runDeviceInstall({}, dependencies)
+
+    expect(state.downloads).toHaveLength(1)
+    expect(commandsMatching(calls, 'install')).toHaveLength(1)
+  })
+
+  test('exits quietly when the catalog picker is cancelled', async () => {
+    const { calls, runCommand } = recordingRunner(singleDeviceWorld)
+    const runMultiselect: MultiSelectPrompt = async () => Symbol('cancelled')
+    const { dependencies, state } = installDependencies(runCommand, { runMultiselect })
+
+    await runDeviceInstall({}, dependencies)
+
+    expect(commandsMatching(calls, 'install')).toEqual([])
+    expect(state.outro).toBeUndefined()
+  })
+
+  test('continues past a failed install and reports a summary', async () => {
+    const previousExitCode = process.exitCode
+    const { calls, runCommand } = recordingRunner((cmd) => {
+      if (cmd.includes('bad.apk')) {
+        throw new Error('adb: failed to install bad.apk: Failure [INSTALL_FAILED_VERSION_DOWNGRADE]')
+      }
+
+      return singleDeviceWorld(cmd)
+    })
+    const { dependencies, state } = installDependencies(runCommand)
+
+    try {
+      await runDeviceInstall({ apks: ['bad.apk', 'good.apk'] }, dependencies)
+
+      expect(commandsMatching(calls, 'install')).toHaveLength(2)
+      expect(state.logs).toContain('Failed to install bad.apk: INSTALL_FAILED_VERSION_DOWNGRADE')
+      expect(state.notes).toContain('1 installed, 1 failed')
+      expect(state.outro).toBe('1 installed, 1 failed')
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('installs on every connected device with --all', async () => {
+    const { calls, runCommand } = recordingRunner(defaultResponses)
+    const { dependencies } = installDependencies(runCommand)
+
+    await runDeviceInstall({ all: true, apks: ['app.apk'] }, dependencies)
+
+    expect(
+      commandsMatching(calls, 'install')
+        .map((cmd) => cmd[2])
+        .sort(),
+    ).toEqual(['SM02E4072816572', 'emulator-5554'])
+  })
+
+  test('maps --downgrade and --grant to adb flags', async () => {
+    const { calls, runCommand } = recordingRunner(singleDeviceWorld)
+    const { dependencies } = installDependencies(runCommand)
+
+    await runDeviceInstall({ apks: ['app.apk'], downgrade: true, grant: true }, dependencies)
+
+    expect(commandsMatching(calls, 'install')).toEqual([
+      ['adb', '-s', 'SM02E4072816572', 'install', '-r', '-d', '-g', 'app.apk'],
+    ])
+  })
+
+  test('lists the catalog without touching adb', async () => {
+    const { calls, runCommand } = recordingRunner(singleDeviceWorld)
+    const { dependencies, state } = installDependencies(runCommand)
+
+    await runDeviceInstall({ list: true }, dependencies)
+
+    expect(calls).toEqual([])
+    expect(state.notes).toEqual(['APK catalog'])
+  })
+
+  test('reports when no device is connected', async () => {
+    const previousExitCode = process.exitCode
+    const { calls, runCommand } = recordingRunner((cmd) =>
+      cmd[1] === 'devices' ? 'List of devices attached\n' : defaultResponses(cmd),
+    )
+    const { dependencies, state } = installDependencies(runCommand)
+
+    try {
+      await runDeviceInstall({ apks: ['app.apk'] }, dependencies)
+
+      expect(state.notes).toEqual(['No connected Android devices or emulators found'])
+      expect(commandsMatching(calls, 'install')).toEqual([])
       expect(process.exitCode).toBe(1)
     } finally {
       process.exitCode = previousExitCode ?? 0
