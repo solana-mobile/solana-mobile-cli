@@ -235,6 +235,9 @@ npx solana-mobile create my-app --package-manager pnpm
 # Create a project with a specific template
 npx solana-mobile create my-app --template expo-kit-wallet
 
+# Create a project from a template on disk
+npx solana-mobile create my-app --template ../templates/mobile/expo-kit-wallet
+
 # List template ids as JSON
 npx solana-mobile create --list-template-ids
 

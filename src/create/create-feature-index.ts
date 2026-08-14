@@ -1,4 +1,5 @@
-import { resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
 import { cancel, intro, isCancel, log, note, outro, select, text } from '@clack/prompts'
 import { type Command, InvalidArgumentError, type Option } from 'commander'
 import {
@@ -64,6 +65,7 @@ export type CreateSolanaDappApi = {
 
 type RunCreateOptions = {
   createSolanaDapp?: CreateSolanaDappApi
+  exit?: (code: number) => void
   promptProjectName?: (createSolanaDapp: CreateSolanaDappApi, template: Template) => Promise<string | undefined>
   selectTemplate?: (templates: TemplateJsonTemplate[]) => Promise<Template | undefined>
 }
@@ -84,10 +86,16 @@ export async function runCreate(
   options: CreateCommandOptions,
   {
     createSolanaDapp: injectedCreateSolanaDapp,
+    exit = process.exit,
     promptProjectName: promptProjectNameInput = promptProjectName,
     selectTemplate = selectCustomTemplate,
   }: RunCreateOptions = {},
 ) {
+  // create-solana-dapp's task runner never stops its spinner when a task throws, and the spinner's
+  // interval and raw-mode stdin block keep the event loop alive. Once createApp has started, a
+  // failure has to exit the process explicitly or the CLI hangs until it is interrupted.
+  let createAppStarted = false
+
   try {
     const createSolanaDapp = injectedCreateSolanaDapp ?? createSolanaDappApi
     const packageManager = options.packageManager ?? createSolanaDapp.detectInvokedPackageManager()
@@ -170,6 +178,7 @@ export async function runCreate(
       log.message(JSON.stringify(createArgs, undefined, 2))
     }
 
+    createAppStarted = true
     const instructions = await createSolanaDapp.createApp(createArgs)
 
     note(
@@ -185,6 +194,12 @@ export async function runCreate(
   } catch (error) {
     cancel(`${error}`)
     process.exitCode = 1
+
+    // Errors raised before createApp leave no spinner behind, so those return normally and let
+    // stdout flush. clack registers its own `exit` listener, which restores the terminal.
+    if (createAppStarted) {
+      exit(1)
+    }
   }
 }
 
@@ -318,7 +333,37 @@ async function selectCustomTemplate(templates: TemplateJsonTemplate[]) {
   return template
 }
 
+// Mirrors the path forms create-solana-dapp's own `findTemplate` treats as local. A bare `foo/bar`
+// stays an external GitHub reference, so a local template always needs an explicit `./` or `/`.
+function isLocalTemplatePath(templateName: string): boolean {
+  return templateName.startsWith('/') || templateName.startsWith('./') || templateName.startsWith('../')
+}
+
+// create-solana-dapp copies `local:` templates from disk instead of downloading them. Without this
+// branch a filesystem path falls through to the `gh:` default below and the clone fails.
+function resolveLocalTemplate(templateName: string): Template {
+  const absolutePath = isAbsolute(templateName) ? templateName : resolve(process.cwd(), templateName)
+
+  if (!existsSync(absolutePath)) {
+    throw new Error(`Local template path does not exist: ${absolutePath}`)
+  }
+
+  log.warn(
+    'Please install templates you trust and have verified. This feature is only intended for local development and not to clone official templates.',
+  )
+
+  return {
+    description: `${templateName} (local)`,
+    id: `local:${absolutePath}`,
+    name: templateName,
+  }
+}
+
 function resolveTemplate(templateName: string, templates: TemplateJsonTemplate[]): Template {
+  if (isLocalTemplatePath(templateName)) {
+    return resolveLocalTemplate(templateName)
+  }
+
   const template = templates.find(
     (template) =>
       template.name === templateName ||
