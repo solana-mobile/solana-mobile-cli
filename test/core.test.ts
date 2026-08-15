@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import type { CreateAppArgs, Template, TemplateJsonTemplate } from 'create-solana-dapp'
 import { createApp, runApp } from '../src/app.ts'
 import { readPackageMetadata } from '../src/core/data-access/package-metadata.ts'
@@ -1227,6 +1228,106 @@ describe('app', () => {
     expect(getInitialProjectName({ ...template, name: 'My_Template' })).toBeUndefined()
   })
 
+  test('passes an absolute local template path through as a local template', async () => {
+    // Without the local branch the path is prefixed with `gh:` and cloning fails
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+    const localTemplate = resolve(process.cwd(), 'test/fixtures/template-repository/mobile/example')
+
+    await runCreate(
+      { projectName: 'my-app', skipInstall: true, template: localTemplate },
+      { createSolanaDapp, selectTemplate: async () => template },
+    )
+
+    expect(createAppArgs).toMatchObject([
+      { template: { description: `${localTemplate} (local)`, id: `local:${localTemplate}`, name: localTemplate } },
+    ])
+  })
+
+  test('resolves a relative local template path against the working directory', async () => {
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+    const relativeTemplate = './test/fixtures/template-repository/mobile/example'
+
+    await runCreate(
+      { projectName: 'my-app', skipInstall: true, template: relativeTemplate },
+      { createSolanaDapp, selectTemplate: async () => template },
+    )
+
+    expect(createAppArgs).toMatchObject([
+      { template: { id: `local:${resolve(process.cwd(), relativeTemplate)}`, name: relativeTemplate } },
+    ])
+  })
+
+  test('rejects a local template path that does not exist', async () => {
+    const previousExitCode = process.exitCode
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    try {
+      await runCreate(
+        { projectName: 'my-app', skipInstall: true, template: '/does-not-exist/solana-mobile-template' },
+        { createSolanaDapp, selectTemplate: async () => template },
+      )
+
+      expect(createAppArgs).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('keeps treating a bare owner/repo template as an external GitHub reference', async () => {
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    await runCreate(
+      { projectName: 'my-app', skipInstall: true, template: 'solana-mobile/templates/mobile/expo-kit-anchor' },
+      { createSolanaDapp, selectTemplate: async () => template },
+    )
+
+    expect(createAppArgs).toMatchObject([{ template: { id: 'gh:solana-mobile/templates/mobile/expo-kit-anchor' } }])
+  })
+
+  test('exits when createApp fails so the leftover spinner cannot hang the process', async () => {
+    // create-solana-dapp leaves its spinner running when a task throws, and the spinner keeps the
+    // event loop alive, so returning normally here would hang until the user interrupts
+    const previousExitCode = process.exitCode
+    const exitCodes: number[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppError: new Error('Error cloning the template') })
+
+    try {
+      await runCreate(
+        { projectName: 'my-app', skipInstall: true, template: 'expo-kit-wallet' },
+        { createSolanaDapp, exit: (code) => exitCodes.push(code), selectTemplate: async () => template },
+      )
+
+      expect(exitCodes).toEqual([1])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('returns without exiting when the failure happens before createApp', async () => {
+    // No spinner is running yet, so returning lets stdout flush instead of truncating it
+    const previousExitCode = process.exitCode
+    const exitCodes: number[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp()
+
+    try {
+      await runCreate(
+        { projectName: 'My_App', skipInstall: true, template: 'expo-kit-wallet' },
+        { createSolanaDapp, exit: (code) => exitCodes.push(code), selectTemplate: async () => template },
+      )
+
+      expect(exitCodes).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
   test('stops before prompting a project name when template selection is canceled', async () => {
     const previousExitCode = process.exitCode
     const createAppArgs: CreateAppArgs[] = []
@@ -1311,10 +1412,19 @@ function createAppWithSilencedCreateCommand() {
   return app
 }
 
-function createMockCreateSolanaDapp({ createAppArgs = [] }: { createAppArgs?: CreateAppArgs[] } = {}) {
+function createMockCreateSolanaDapp({
+  createAppArgs = [],
+  createAppError,
+}: {
+  createAppArgs?: CreateAppArgs[]
+  createAppError?: Error
+} = {}) {
   return {
     createApp: async (args) => {
       createAppArgs.push(args)
+      if (createAppError) {
+        throw createAppError
+      }
       return ['Install dependencies:']
     },
     detectInvokedPackageManager: () => 'bun',
