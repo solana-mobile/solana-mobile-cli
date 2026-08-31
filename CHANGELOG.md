@@ -1,5 +1,63 @@
 # solana-mobile
 
+## 0.3.0
+
+### Minor Changes
+
+- 4db15a4: Add a `device install` command that installs APKs from files, directories, or a built-in catalog.
+
+  ```shell
+  # Pick catalog APKs from a list
+  solana-mobile device install
+
+  # Install a catalog APK by name
+  solana-mobile device install fakewallet
+
+  # Install local APK files and every .apk in a directory
+  solana-mobile device install app.apk ./builds/
+  ```
+
+  The catalog ships with `fakewallet` (the Mobile Wallet Adapter test wallet, pinned to
+  `@solana-mobile/wallet-adapter-mobile@2.2.9`), downloaded from GitHub releases and cached under
+  `~/.cache/solana-mobile/apks/` so repeat installs skip the network (`--force` re-downloads).
+  `--all` installs on every connected device, `--downgrade` and `--grant` map to `adb install -d`
+  and `-g`, and `--list` prints the catalog. Installs continue past failures and report a summary,
+  exiting non-zero when anything failed.
+
+- 52d435e: Add an `emulator tune` command that applies agent-friendly tweaks to a running emulator, and run
+  it automatically after `emulator start` and `emulator create --start` (skip with `--no-tune`).
+
+  ```shell
+  solana-mobile emulator tune
+  solana-mobile emulator tune my_emulator
+  solana-mobile emulator start my_emulator --no-tune
+  ```
+
+  The tweaks silence the first-contact noise that trips up automation agents on a fresh AVD: the
+  stylus handwriting onboarding overlay, Chrome's sign-in first-run and notification permission
+  dialogs, the new-tab feed and tips cards, boot-time system and Play Store notifications, window
+  animations, touch sounds and haptics, autofill prompts, and the lock screen, while keeping the
+  screen awake and marking device setup as complete.
+
+  Tweaks only ever target emulators: candidates are resolved from `emulator-*` adb serials and the
+  target must report an emulator property (`ro.boot.qemu`/`ro.kernel.qemu`) before any tuning command runs,
+  so a physical device serial is refused.
+
+### Patch Changes
+
+- 9f83795: Support local template paths in the create command and stop hanging on a failed clone.
+
+  A `--template` value starting with `/`, `./`, or `../` is now passed to create-solana-dapp as a
+  local template instead of being prefixed with `gh:`, which made cloning fail:
+
+  ```shell
+  solana-mobile create my-app --template ../templates/mobile/expo-kit-anchor
+  ```
+
+  A path that does not exist is reported before anything is created. When a create task does fail,
+  the command now exits with a non-zero status instead of leaving create-solana-dapp's spinner
+  running until the process is interrupted.
+
 ## 0.2.0
 
 ### Minor Changes
