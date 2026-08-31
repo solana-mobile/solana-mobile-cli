@@ -9,18 +9,21 @@ import type {
   CreateAvdResult,
   EmulatorCreateCommandOptions,
   StartEmulatorDependencies,
+  WaitForEmulatorBootDependencies,
 } from './data-access/emulator-types.ts'
 import { defaultReadDirectory, defaultReadTextFile } from './data-access/list-installed-avds.ts'
 import { listInstalledSystemImages, resolveInstalledSystemImage } from './data-access/list-installed-system-images.ts'
 import { resolveAndroidSdkRoot } from './data-access/resolve-android-sdk-root.ts'
 import { defaultStartProcess, startEmulator } from './data-access/start-emulator.ts'
 import { type InstallEmulatorSystemImageDependencies, installEmulatorSystemImage } from './emulator-feature-images.ts'
+import { waitAndTuneEmulator } from './emulator-feature-tune.ts'
 import { promptEmulatorName } from './ui/emulator-ui-prompt-emulator-name.ts'
 
 interface RunEmulatorCreateDependencies
   extends CreateAvdDependencies,
     InstallEmulatorSystemImageDependencies,
-    StartEmulatorDependencies {
+    StartEmulatorDependencies,
+    WaitForEmulatorBootDependencies {
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
@@ -41,14 +44,17 @@ export async function runEmulatorCreate(
     note: showNote = note,
     outro: showOutro = outro,
     pathExists = defaultPathExists(),
+    pollIntervalMs,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
     runCommand = runExecutable,
     runInteractiveCommand,
     runSelect,
     runText,
+    sleep,
     spinner,
     startProcess = defaultStartProcess,
+    timeoutMs,
     taskLog,
     tasks: runTasks = tasks,
     writeTextFile = defaultWriteTextFile,
@@ -146,6 +152,19 @@ export async function runEmulatorCreate(
         },
       )
       log(`Started emulator: ${result.name}`)
+
+      if (options.tune !== false) {
+        await waitAndTuneEmulator(result.name, {
+          formatCommand,
+          log,
+          note: showNote,
+          pollIntervalMs,
+          runCommand,
+          sleep,
+          timeoutMs,
+        })
+      }
+
       showOutro('Done')
       return
     }

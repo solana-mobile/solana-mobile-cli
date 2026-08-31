@@ -31,6 +31,7 @@ import {
   type EmulatorStartCommandOptions,
   type EmulatorStatusCommandOptions,
   type EmulatorStopCommandOptions,
+  type EmulatorTuneCommandOptions,
   runEmulatorCreate,
   runEmulatorDelete,
   runEmulatorImages,
@@ -40,6 +41,7 @@ import {
   runEmulatorStart,
   runEmulatorStatus,
   runEmulatorStop,
+  runEmulatorTune,
 } from './emulator/emulator-feature-index.ts'
 import {
   type LocalnetCheckCommandOptions,
@@ -79,6 +81,7 @@ export type AppOptions = {
   runEmulatorStart?: (options: EmulatorStartCommandOptions) => Promise<void>
   runEmulatorStatus?: (options: EmulatorStatusCommandOptions) => Promise<void>
   runEmulatorStop?: (options: EmulatorStopCommandOptions) => Promise<void>
+  runEmulatorTune?: (options: EmulatorTuneCommandOptions) => Promise<void>
   runLocalnetCheck?: (options: LocalnetCheckCommandOptions) => Promise<void>
   runLocalnetForward?: (options: LocalnetForwardCommandOptions) => Promise<void>
   runLocalnetLogs?: (options: LocalnetLogsCommandOptions) => Promise<void>
@@ -105,6 +108,7 @@ export function createApp({
   runEmulatorStart: runEmulatorStartCommand = runEmulatorStart,
   runEmulatorStatus: runEmulatorStatusCommand = runEmulatorStatus,
   runEmulatorStop: runEmulatorStopCommand = runEmulatorStop,
+  runEmulatorTune: runEmulatorTuneCommand = runEmulatorTune,
   runLocalnetCheck: runLocalnetCheckCommand = runLocalnetCheck,
   runLocalnetForward: runLocalnetForwardCommand = runLocalnetForward,
   runLocalnetLogs: runLocalnetLogsCommand = runLocalnetLogs,
@@ -241,6 +245,7 @@ export function createApp({
     .option('--sdk-root <path>', 'Android SDK root')
     .option('--start', 'Start the emulator after creating it')
     .option('--system-image <package>', 'Android system image package')
+    .option('--no-tune', 'Skip applying emulator tweaks after starting')
     .option('-v, --verbose', 'Verbose output')
     .option('--vm-heap-mb <megabytes>', 'VM heap size in MB', parseIntegerOption)
     .action(async (name: string | undefined, options: Omit<EmulatorCreateCommandOptions, 'name'>) => {
@@ -303,6 +308,7 @@ export function createApp({
     .command('start [name]')
     .description('Start an Android emulator')
     .option('--sdk-root <path>', 'Android SDK root')
+    .option('--no-tune', 'Skip applying emulator tweaks after starting')
     .action(async (name: string | undefined, options: Omit<EmulatorStartCommandOptions, 'name'>) => {
       await runEmulatorStartCommand({ ...options, name })
     })
@@ -319,6 +325,13 @@ export function createApp({
     .description('Stop a running Android emulator')
     .action(async (nameOrSerial: string | undefined) => {
       await runEmulatorStopCommand({ nameOrSerial })
+    })
+
+  emulatorCommand
+    .command('tune [nameOrSerial]')
+    .description('Apply agent-friendly tweaks to a running Android emulator')
+    .action(async (nameOrSerial: string | undefined) => {
+      await runEmulatorTuneCommand({ nameOrSerial })
     })
 
   const localnetCommand = withLocalnetTargetOptions(

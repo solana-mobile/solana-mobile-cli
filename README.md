@@ -8,7 +8,7 @@ CLI for Solana Mobile development.
 - **Create projects** — scaffold Solana Mobile apps from the template catalog
 - **Device helpers** — list connected devices and open URLs, dev servers, and deep links on them
 - **Doctor checks** — local dependency checks with recommendations
-- **Emulator helpers** — create, delete, list, start, status, and stop local Android emulators
+- **Emulator helpers** — create, delete, list, start, status, stop, and tune local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
 - **Template repository checks** — verify that a template repository's generated artifacts are up to date
 
@@ -66,6 +66,9 @@ npx solana-mobile emulator start
 # Start an emulator by name
 npx solana-mobile emulator start local_phone
 
+# Start an emulator without applying tweaks after boot
+npx solana-mobile emulator start local_phone --no-tune
+
 # Show status for all installed and running emulators
 npx solana-mobile emulator status
 
@@ -77,6 +80,12 @@ npx solana-mobile emulator stop
 
 # Stop a running emulator by name or serial
 npx solana-mobile emulator stop local_phone
+
+# Tune by choosing from running emulators
+npx solana-mobile emulator tune
+
+# Tune a running emulator by name or serial
+npx solana-mobile emulator tune local_phone
 
 # Use the short alias
 npx solana-mobile emu list

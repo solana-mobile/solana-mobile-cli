@@ -21,6 +21,7 @@ import {
   listInstalledAndroidPlatforms,
   parseSystemImagePackages,
 } from '../src/emulator/data-access/system-image-package-manager.ts'
+import { applyEmulatorTweaks, tuneEmulator, waitForEmulatorBoot } from '../src/emulator/data-access/tune-emulator.ts'
 import { runEmulatorCreate } from '../src/emulator/emulator-feature-create.ts'
 import { runEmulatorDelete } from '../src/emulator/emulator-feature-delete.ts'
 import {
@@ -30,6 +31,7 @@ import {
 } from '../src/emulator/emulator-feature-images.ts'
 import { runEmulatorStart } from '../src/emulator/emulator-feature-start.ts'
 import { runEmulatorStop } from '../src/emulator/emulator-feature-stop.ts'
+import { runEmulatorTune } from '../src/emulator/emulator-feature-tune.ts'
 
 const NO_INSTALLED_SYSTEM_IMAGES_MESSAGE = [
   'No Android system images are installed.',
@@ -1630,9 +1632,12 @@ Available packages:
       await writeFile(join(homeDirectory, '.android', 'avd', 'Beta.avd', 'config.ini'), 'target=android-35\n')
 
       await runEmulatorStart(
-        { sdkRoot: '/sdk' },
+        { sdkRoot: '/sdk', tune: false },
         {
           getHomeDirectory: () => homeDirectory,
+          runCommand: async (cmd) => {
+            throw new Error(`Unexpected command: ${cmd.join(' ')}`)
+          },
           runSelect: async (options) => {
             expect(options.options.map((option) => option.value)).toEqual(['Alpha', 'Beta'])
             return 'Beta'
@@ -1671,6 +1676,271 @@ Available packages:
     } finally {
       await rm(homeDirectory, { force: true, recursive: true })
     }
+  })
+
+  // Single source for the adb commands the tweak registry issues, in registry order.
+  function expectedTweakCommands(serial: string): Array<[string, ...string[]]> {
+    const shell = (...args: string[]): [string, ...string[]] => ['adb', '-s', serial, 'shell', ...args]
+
+    return [
+      shell('settings', 'put', 'global', 'animator_duration_scale', '0'),
+      shell('settings', 'put', 'global', 'transition_animation_scale', '0'),
+      shell('settings', 'put', 'global', 'window_animation_scale', '0'),
+      shell('settings', 'put', 'secure', 'autofill_service', 'null'),
+      shell('pm', 'grant', 'com.android.chrome', 'android.permission.POST_NOTIFICATIONS'),
+      shell('appops', 'set', 'com.android.chrome', 'POST_NOTIFICATION', 'ignore'),
+      shell(
+        'echo',
+        'chrome --disable-fre --no-default-browser-check --no-first-run --disable-features=AndroidTipsNotifications,EducationalTipModule,InterestFeedV2,MagicStackAndroid --enable-features=FeedHeaderRemoval,HomeButtonRemoval:apply_to_all_countries/true/remove_home_button_everywhere/true',
+        '>',
+        '/data/local/tmp/chrome-command-line',
+      ),
+      shell('am', 'set-debug-app', '--persistent', 'com.android.chrome'),
+      shell('settings', 'put', 'system', 'haptic_feedback_enabled', '0'),
+      shell('settings', 'put', 'system', 'sound_effects_enabled', '0'),
+      shell('locksettings', 'set-disabled', 'true'),
+      shell('settings', 'put', 'global', 'device_provisioned', '1'),
+      shell('settings', 'put', 'secure', 'user_setup_complete', '1'),
+      shell('settings', 'put', 'global', 'stay_on_while_plugged_in', '7'),
+      shell('settings', 'put', 'system', 'screen_off_timeout', '1800000'),
+      shell('settings', 'put', 'secure', 'stylus_handwriting_education_shown', '1'),
+      shell('settings', 'put', 'secure', 'stylus_handwriting_enabled', '0'),
+      shell('appops', 'set', 'android', 'POST_NOTIFICATION', 'ignore'),
+      shell('appops', 'set', 'com.android.vending', 'POST_NOTIFICATION', 'ignore'),
+      shell('appops', 'set', 'com.google.android.gms', 'POST_NOTIFICATION', 'ignore'),
+    ]
+  }
+
+  test('waits for boot and tunes after starting an emulator', async () => {
+    const homeDirectory = await createTemporaryDirectory('solana-mobile-avd-start-tune-')
+    const commands: Array<[string, ...string[]]> = []
+    const startedCommands: Array<[string, ...string[]]> = []
+
+    try {
+      await mkdir(join(homeDirectory, '.android', 'avd', 'Alpha.avd'), { recursive: true })
+      await writeFile(join(homeDirectory, '.android', 'avd', 'Alpha.ini'), 'path=Alpha.avd\n')
+      await writeFile(join(homeDirectory, '.android', 'avd', 'Alpha.avd', 'config.ini'), 'target=android-36\n')
+
+      await runEmulatorStart(
+        { name: 'Alpha', sdkRoot: '/sdk' },
+        {
+          getHomeDirectory: () => homeDirectory,
+          runCommand: async (cmd) => {
+            commands.push(cmd)
+
+            if (cmd.join(' ') === 'adb devices') {
+              return 'List of devices attached\nemulator-5554 device\n'
+            }
+
+            if (cmd.join(' ') === 'adb -s emulator-5554 emu avd name') {
+              return 'Alpha\n'
+            }
+
+            if (cmd.join(' ') === 'adb -s emulator-5554 shell getprop sys.boot_completed') {
+              return '1\n'
+            }
+
+            if (cmd.join(' ') === 'adb -s emulator-5554 shell getprop ro.boot.qemu') {
+              return '1\n'
+            }
+
+            return ''
+          },
+          runSelect: async () => {
+            throw new Error('Unexpected start selection prompt.')
+          },
+          sleep: async () => {},
+          startProcess: async (cmd) => {
+            startedCommands.push(cmd)
+          },
+        },
+      )
+
+      expect(startedCommands).toEqual([['/sdk/emulator/emulator', '@Alpha']])
+      expect(commands).toEqual([
+        ['adb', 'devices'],
+        ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
+        ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'sys.boot_completed'],
+        ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.boot.qemu'],
+        ...expectedTweakCommands('emulator-5554'),
+      ])
+    } finally {
+      await rm(homeDirectory, { force: true, recursive: true })
+    }
+  })
+
+  test('tunes a running emulator by name', async () => {
+    const commands: Array<[string, ...string[]]> = []
+
+    const tuned = await tuneEmulator('Alpha', {
+      runCommand: async (cmd) => {
+        commands.push(cmd)
+
+        if (cmd.join(' ') === 'adb devices') {
+          return 'List of devices attached\nemulator-5554 device\n'
+        }
+
+        if (cmd.join(' ') === 'adb -s emulator-5554 emu avd name') {
+          return 'Alpha\n'
+        }
+
+        if (cmd.join(' ') === 'adb -s emulator-5554 shell getprop ro.boot.qemu') {
+          return '1\n'
+        }
+
+        return ''
+      },
+    })
+
+    expect(commands).toEqual([
+      ['adb', 'devices'],
+      ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
+      ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.boot.qemu'],
+      ...expectedTweakCommands('emulator-5554'),
+    ])
+    expect(tuned.emulator).toEqual({ name: 'Alpha', serial: 'emulator-5554' })
+    expect(tuned.applied.map((tweak) => tweak.name)).toEqual([
+      'animations-off',
+      'autofill-off',
+      'chrome-notifications-off',
+      'chrome-quiet',
+      'keyboard-feedback-off',
+      'lockscreen-off',
+      'provisioning-complete',
+      'screen-awake',
+      'stylus-handwriting',
+      'system-notifications-off',
+    ])
+    expect(tuned.skipped).toEqual([])
+  })
+
+  test('refuses to tune a target without emulator properties', async () => {
+    const commands: Array<[string, ...string[]]> = []
+
+    await expect(
+      applyEmulatorTweaks('emulator-5554', {
+        runCommand: async (cmd) => {
+          commands.push(cmd)
+          return ''
+        },
+      }),
+    ).rejects.toThrow('Refusing to tune emulator-5554')
+
+    expect(commands).toEqual([
+      ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.boot.qemu'],
+      ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.kernel.qemu'],
+    ])
+  })
+
+  test('selects a running emulator before tuning when name or serial is omitted', async () => {
+    const cancelMessages: string[] = []
+    const commands: Array<[string, ...string[]]> = []
+
+    await runEmulatorTune(
+      {},
+      {
+        cancel: (message) => {
+          cancelMessages.push(message)
+        },
+        runCommand: async (cmd) => {
+          commands.push(cmd)
+
+          if (cmd.join(' ') === 'adb devices') {
+            return 'List of devices attached\nemulator-5554 device\n'
+          }
+
+          if (cmd.join(' ') === 'adb -s emulator-5554 emu avd name') {
+            return 'Alpha\n'
+          }
+
+          if (cmd.join(' ') === 'adb -s emulator-5554 shell getprop ro.boot.qemu') {
+            return '1\n'
+          }
+
+          return ''
+        },
+        runSelect: async (options) => {
+          expect(options.message).toEqual('Select a running emulator to tune')
+          expect(options.options).toEqual([{ hint: 'serial: emulator-5554', label: 'Alpha', value: 'emulator-5554' }])
+          return 'emulator-5554'
+        },
+      },
+    )
+
+    expect(cancelMessages).toEqual([])
+    expect(commands).toEqual([
+      ['adb', 'devices'],
+      ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
+      ['adb', 'devices'],
+      ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
+      ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.boot.qemu'],
+      ...expectedTweakCommands('emulator-5554'),
+    ])
+  })
+
+  test('fails when the emulator does not boot within the timeout', async () => {
+    const sleepDurations: number[] = []
+
+    await expect(
+      waitForEmulatorBoot('Alpha', {
+        pollIntervalMs: 10,
+        runCommand: async () => 'List of devices attached\n',
+        sleep: async (milliseconds) => {
+          sleepDurations.push(milliseconds)
+        },
+        timeoutMs: 30,
+      }),
+    ).rejects.toThrow('Emulator did not boot within')
+
+    expect(sleepDurations).toEqual([10, 10, 10])
+  })
+
+  test('sleeps the remaining duration when the timeout is not divisible by the interval', async () => {
+    const sleepDurations: number[] = []
+
+    await expect(
+      waitForEmulatorBoot('Alpha', {
+        pollIntervalMs: 10,
+        runCommand: async () => 'List of devices attached\n',
+        sleep: async (milliseconds) => {
+          sleepDurations.push(milliseconds)
+        },
+        timeoutMs: 25,
+      }),
+    ).rejects.toThrow('Emulator did not boot within')
+
+    expect(sleepDurations).toEqual([10, 10, 5])
+  })
+
+  test('rejects an ambiguous emulator name while waiting for boot', async () => {
+    await expect(
+      waitForEmulatorBoot('Alpha', {
+        runCommand: async (cmd) => {
+          if (cmd.join(' ') === 'adb devices') {
+            return 'List of devices attached\nemulator-5554 device\nemulator-5556 device\n'
+          }
+
+          return 'Alpha\n'
+        },
+        sleep: async () => {},
+      }),
+    ).rejects.toThrow('Multiple running emulators match Alpha. Tune by serial instead.')
+  })
+
+  test('rejects invalid boot polling durations', async () => {
+    await expect(
+      waitForEmulatorBoot('Alpha', {
+        pollIntervalMs: 0,
+        runCommand: async () => 'List of devices attached\n',
+      }),
+    ).rejects.toThrow('pollIntervalMs must be a positive number: 0')
+
+    await expect(
+      waitForEmulatorBoot('Alpha', {
+        runCommand: async () => 'List of devices attached\n',
+        timeoutMs: Number.POSITIVE_INFINITY,
+      }),
+    ).rejects.toThrow('timeoutMs must be a non-negative number: Infinity')
   })
 
   test('stops a running emulator by name', async () => {
