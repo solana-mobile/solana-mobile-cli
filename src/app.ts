@@ -14,8 +14,10 @@ import {
   runCreate,
 } from './create/create-feature-index.ts'
 import {
+  type DeviceInstallCommandOptions,
   type DeviceListCommandOptions,
   type DeviceOpenCommandOptions,
+  runDeviceInstall,
   runDeviceList,
   runDeviceOpen,
 } from './device/device-feature-index.ts'
@@ -68,6 +70,7 @@ import {
 
 export type AppOptions = {
   checkForNewerVersion?: (options: VersionCheckOptions) => Promise<VersionCheckResult | undefined>
+  runDeviceInstall?: (options: DeviceInstallCommandOptions) => Promise<void>
   runDeviceList?: (options: DeviceListCommandOptions) => Promise<void>
   runDeviceOpen?: (options: DeviceOpenCommandOptions) => Promise<void>
   runEmulatorCreate?: (options: EmulatorCreateCommandOptions) => Promise<void>
@@ -94,6 +97,7 @@ export type AppOptions = {
 
 export function createApp({
   checkForNewerVersion: checkForNewerVersionFn = checkForNewerVersion,
+  runDeviceInstall: runDeviceInstallCommand = runDeviceInstall,
   runDeviceList: runDeviceListCommand = runDeviceList,
   runDeviceOpen: runDeviceOpenCommand = runDeviceOpen,
   runEmulatorCreate: runEmulatorCreateCommand = runEmulatorCreate,
@@ -196,6 +200,26 @@ export function createApp({
   deviceCommand.action(() => {
     deviceCommand.outputHelp()
   })
+
+  const deviceInstallCommand = deviceCommand
+    .command('install [apks...]')
+    .description('Install APKs from files, directories, or the APK catalog')
+    .option('--all', 'Install on every connected device')
+    .option('--device <serial>', 'Target a device serial')
+    .option('--downgrade', 'Allow version downgrades (adb install -d)')
+    .option('--force', 'Re-download catalog APKs even when cached')
+    .option('--grant', 'Grant all runtime permissions (adb install -g)')
+    .option('--list', 'List the APKs available in the catalog')
+    .option('-v, --verbose', 'Verbose output')
+    .action(async (apks: string[] | undefined, options: Omit<DeviceInstallCommandOptions, 'apks'>) => {
+      if (options.all && options.device) {
+        deviceInstallCommand.error(
+          `error: The --all flag can't be used in combination with --device. Please specify only one.`,
+        )
+      }
+
+      await runDeviceInstallCommand({ ...options, apks: apks ?? [] })
+    })
 
   deviceCommand
     .command('list')

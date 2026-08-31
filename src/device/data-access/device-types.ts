@@ -5,6 +5,17 @@ export interface ConnectedDevice extends AdbDevice {
   name?: string
 }
 
+export interface DeviceInstallCommandOptions {
+  all?: boolean
+  apks?: string[]
+  device?: string
+  downgrade?: boolean
+  force?: boolean
+  grant?: boolean
+  list?: boolean
+  verbose?: boolean
+}
+
 export interface DeviceListCommandOptions {
   json?: boolean
 }
