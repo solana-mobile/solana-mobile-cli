@@ -1,13 +1,22 @@
 import { homedir } from 'node:os'
 import { cancel, log as clackLog, intro, note, outro } from '@clack/prompts'
+import { runExecutable } from '../core/data-access/run-executable.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
-import type { EmulatorStartCommandOptions, StartEmulatorDependencies } from './data-access/emulator-types.ts'
+import type {
+  EmulatorStartCommandOptions,
+  StartEmulatorDependencies,
+  WaitForEmulatorBootDependencies,
+} from './data-access/emulator-types.ts'
 import { defaultReadDirectory, defaultReadTextFile, listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { defaultStartProcess, startEmulator } from './data-access/start-emulator.ts'
+import { waitAndTuneEmulator } from './emulator-feature-tune.ts'
 import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectInstalledEmulatorName } from './ui/emulator-ui-select-installed-emulator-name.ts'
 
-interface RunEmulatorStartDependencies extends PromptDependencies, StartEmulatorDependencies {
+interface RunEmulatorStartDependencies
+  extends PromptDependencies,
+    StartEmulatorDependencies,
+    WaitForEmulatorBootDependencies {
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
@@ -26,10 +35,14 @@ export async function runEmulatorStart(
     log = clackLog.message,
     note: showNote = note,
     outro: showOutro = outro,
+    pollIntervalMs,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
+    runCommand = runExecutable,
     runSelect,
+    sleep,
     startProcess = defaultStartProcess,
+    timeoutMs,
   }: RunEmulatorStartDependencies = {},
 ) {
   try {
@@ -66,6 +79,19 @@ export async function runEmulatorStart(
       },
     )
     log(`Started emulator: ${name}`)
+
+    if (options.tune !== false) {
+      await waitAndTuneEmulator(name, {
+        formatCommand,
+        log,
+        note: showNote,
+        pollIntervalMs,
+        runCommand,
+        sleep,
+        timeoutMs,
+      })
+    }
+
     showOutro('Done')
   } catch (error) {
     showCancel(`${error}`)

@@ -13,6 +13,7 @@ export interface EmulatorCreateCommandOptions {
   sdkRoot?: string
   start?: boolean
   systemImage?: string
+  tune?: boolean
   verbose?: boolean
   vmHeapMb?: number
 }
@@ -44,6 +45,7 @@ export type EmulatorListCommandOptions = Record<string, never>
 export interface EmulatorStartCommandOptions {
   name?: string
   sdkRoot?: string
+  tune?: boolean
 }
 
 export interface EmulatorStatusCommandOptions {
@@ -54,6 +56,10 @@ export interface EmulatorStopCommandOptions {
   nameOrSerial?: string
 }
 
+export interface EmulatorTuneCommandOptions {
+  nameOrSerial?: string
+}
+
 import type {
   CommandRunner,
   InteractiveCommandRunner,
@@ -61,6 +67,11 @@ import type {
 } from '../../core/data-access/command-types.ts'
 
 export type { CommandRunner, InteractiveCommandRunner, RunCommandOptions }
+
+export interface AppliedEmulatorTweaks {
+  applied: readonly EmulatorTweak[]
+  skipped: readonly SkippedEmulatorTweak[]
+}
 
 export interface CreateAvdDependencies {
   getHomeDirectory?: HomeDirectoryResolver
@@ -97,6 +108,13 @@ export interface EmulatorStatus {
   serial?: string
   state: string
   target?: string
+}
+
+export interface EmulatorTweak {
+  // Each entry is the argument list for one `adb -s <serial> shell <...command>` invocation.
+  commands: readonly (readonly string[])[]
+  description: string
+  name: string
 }
 
 export type FileReader = (filePath: string) => Promise<string>
@@ -152,8 +170,25 @@ export interface RunningEmulator {
   serial: string
 }
 
+export interface SkippedEmulatorTweak {
+  reason: string
+  tweak: EmulatorTweak
+}
+
 export interface StartEmulatorDependencies extends ListInstalledAvdsDependencies {
   startProcess?: ProcessStarter
 }
 
 export interface StopEmulatorDependencies extends ListRunningEmulatorsDependencies {}
+
+export interface TuneEmulatorDependencies extends ListRunningEmulatorsDependencies {}
+
+export interface TuneEmulatorResult extends AppliedEmulatorTweaks {
+  emulator: RunningEmulator
+}
+
+export interface WaitForEmulatorBootDependencies extends ListRunningEmulatorsDependencies {
+  pollIntervalMs?: number
+  sleep?: (milliseconds: number) => Promise<void>
+  timeoutMs?: number
+}

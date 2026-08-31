@@ -43,7 +43,7 @@ export async function runEmulatorStop(
         return
       }
 
-      nameOrSerial = await selectRunningEmulatorSerial(runningEmulators, runSelect)
+      nameOrSerial = await selectRunningEmulatorSerial(runningEmulators, 'Select a running emulator to stop', runSelect)
 
       if (!nameOrSerial) {
         return

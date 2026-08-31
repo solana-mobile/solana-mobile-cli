@@ -4,10 +4,11 @@ import { resolvePromptCancellation, type SelectPrompt } from './emulator-ui-prom
 
 export async function selectRunningEmulatorSerial(
   runningEmulators: readonly RunningEmulator[],
+  message: string,
   runSelect: SelectPrompt = select as SelectPrompt,
 ): Promise<string | undefined> {
   const selected = await runSelect({
-    message: 'Select a running emulator to stop',
+    message,
     options: runningEmulators.map(createRunningEmulatorOption),
   })
 
