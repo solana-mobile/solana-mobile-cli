@@ -19,7 +19,6 @@ const sections: { categories: DoctorCheckCategory[]; checks: string[]; title: st
       'adb',
       'sdkmanager',
       'avdmanager',
-      'SDK licenses',
     ],
     title: 'Android SDK',
   },

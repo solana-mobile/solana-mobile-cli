@@ -101,72 +101,18 @@ export async function checkAndroidSdk(environment: DoctorEnvironment, resolution
       'warn',
     ),
   )
-  const sdkManagerExecutable = await findExecutable('sdkmanager', environment, commandLineDirectories)
-  const sdkManager = await checkTool(
-    environment,
-    resolution.path,
-    'sdkmanager',
-    commandLineDirectories,
-    'sdkmanager',
-    'Install Android SDK Command-line Tools through Android Studio SDK Manager.',
-    'warn',
-    sdkManagerExecutable,
+  checks.push(
+    await checkTool(
+      environment,
+      resolution.path,
+      'sdkmanager',
+      commandLineDirectories,
+      'sdkmanager',
+      'Install Android SDK Command-line Tools through Android Studio SDK Manager.',
+      'warn',
+    ),
   )
-  checks.push(sdkManager)
-  checks.push(await checkSdkLicenses(environment, sdkManagerExecutable))
   return checks
-}
-
-export async function checkSdkLicenses(
-  environment: DoctorEnvironment,
-  sdkManagerExecutable?: string,
-): Promise<DoctorCheckResult> {
-  const command = sdkManagerExecutable ?? 'sdkmanager'
-  const instruction = `Run: ${command} --licenses`
-  if (!sdkManagerExecutable)
-    return {
-      actual: 'unable to check',
-      category: 'android-sdk',
-      message: 'SDK licenses cannot be checked because sdkmanager is unavailable.',
-      name: 'SDK licenses',
-      recommendation: instruction,
-      status: 'info',
-    }
-  try {
-    const output = await environment.runCommand(sdkManagerExecutable, ['--licenses'])
-    const status = parseSdkLicenseStatus(`${output.stdout}\n${output.stderr}`)
-    if (status === 'accepted')
-      return {
-        actual: 'all accepted',
-        category: 'android-sdk',
-        message: 'All Android SDK package licenses are accepted.',
-        name: 'SDK licenses',
-        status: 'pass',
-      }
-    return {
-      actual: status === 'unaccepted' ? 'acceptance required' : 'unable to verify',
-      category: 'android-sdk',
-      message: 'Android SDK package licenses require attention.',
-      name: 'SDK licenses',
-      recommendation: instruction,
-      status: status === 'unaccepted' ? 'warn' : 'info',
-    }
-  } catch {
-    return {
-      actual: 'unable to verify',
-      category: 'android-sdk',
-      message: 'Android SDK package license status could not be determined.',
-      name: 'SDK licenses',
-      recommendation: instruction,
-      status: 'info',
-    }
-  }
-}
-
-export function parseSdkLicenseStatus(output: string): 'accepted' | 'unaccepted' | 'unknown' {
-  if (/all sdk package licenses accepted/i.test(output)) return 'accepted'
-  if (/licenses?.*not been accepted|accept\?\s*\(y\/n\)/is.test(output)) return 'unaccepted'
-  return 'unknown'
 }
 
 async function checkVersionDirectories(
@@ -216,9 +162,8 @@ async function checkTool(
   name: string,
   recommendation: string,
   missingStatus: 'fail' | 'warn',
-  resolvedExecutable?: string,
 ): Promise<DoctorCheckResult> {
-  const executable = resolvedExecutable ?? (await findExecutable(command, environment, directories))
+  const executable = await findExecutable(command, environment, directories)
   if (!executable)
     return {
       actual: 'not found',

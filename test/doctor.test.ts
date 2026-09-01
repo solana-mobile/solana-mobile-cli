@@ -2,10 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { checkAdbVersion, parseAdbVersion } from '../src/doctor/data-access/check-adb-version.ts'
 import { checkAndroidDevices, parseAdbDevices } from '../src/doctor/data-access/check-android-devices.ts'
 import {
-  checkSdkLicenses,
   parseAndroidApiLevels,
   parseEmulatorVersion,
-  parseSdkLicenseStatus,
   resolveAndroidSdk,
   selectHighestBuildToolsVersion,
 } from '../src/doctor/data-access/check-android-sdk.ts'
@@ -104,27 +102,6 @@ describe('Android SDK resolution', () => {
     expect(result.source).toBe('default location')
   })
   test('reports missing SDK', async () => expect((await resolveAndroidSdk(environment())).path).toBeUndefined())
-})
-
-describe('SDK licenses', () => {
-  test('detects accepted licenses without answering prompts', async () => {
-    const result = await checkSdkLicenses(
-      environment({
-        runCommand: async (path) => ({ path, stderr: '', stdout: 'All SDK package licenses accepted.\n' }),
-      }),
-      '/sdkmanager',
-    )
-    expect(result.actual).toBe('all accepted')
-    expect(result.status).toBe('pass')
-  })
-  test('detects licenses requiring acceptance', () => {
-    expect(parseSdkLicenseStatus('Review licenses that have not been accepted (y/N)?')).toBe('unaccepted')
-  })
-  test('provides an instruction when license status cannot be checked', async () => {
-    const result = await checkSdkLicenses(environment())
-    expect(result.recommendation).toBe('Run: sdkmanager --licenses')
-    expect(result.status).toBe('info')
-  })
 })
 
 describe('package manager detection', () => {
