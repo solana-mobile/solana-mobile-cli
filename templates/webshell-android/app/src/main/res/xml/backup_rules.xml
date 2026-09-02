@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+   WebView session state (cookies, local storage, databases) stays on the device.
+   Applies to devices older than API 31; data_extraction_rules.xml covers newer ones.
+-->
+<full-backup-content>
+    <exclude domain="root" path="app_webview" />
+    <exclude domain="database" path="." />
+</full-backup-content>

@@ -2,9 +2,13 @@ import { spawn } from 'node:child_process'
 import { basename } from 'node:path'
 import type { InteractiveCommandRunner, RunCommandOptions } from './command-types.ts'
 
-export const runInteractiveExecutable: InteractiveCommandRunner = async (cmd) => {
+export const runInteractiveExecutable: InteractiveCommandRunner = async (cmd, options = {}) => {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd[0], cmd.slice(1), { stdio: 'inherit' })
+    const child = spawn(cmd[0], cmd.slice(1), {
+      cwd: options.cwd,
+      env: options.env ? { ...process.env, ...options.env } : undefined,
+      stdio: 'inherit',
+    })
 
     child.on('error', reject)
     child.on('close', (exitCode) => {
@@ -21,6 +25,7 @@ export const runInteractiveExecutable: InteractiveCommandRunner = async (cmd) =>
 export async function runExecutable(cmd: [string, ...string[]], options: RunCommandOptions = {}): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd[0], cmd.slice(1), {
+      env: options.env ? { ...process.env, ...options.env } : undefined,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     const stderr: Buffer[] = []

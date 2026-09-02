@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.WebShell" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.WebShell.Splash" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/launcher_icon_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.WebShell</item>
+    </style>
+</resources>

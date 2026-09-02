@@ -11,6 +11,7 @@ CLI for Solana Mobile development.
 - **Emulator helpers** — create, delete, list, start, status, stop, and tune local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
 - **Template repository checks** — verify that a template repository's generated artifacts are up to date
+- **Webshell projects** — wrap an existing web app or PWA in a native Android WebView project and build it to an APK
 
 ## Usage
 
@@ -282,6 +283,37 @@ npx solana-mobile create --list-template-ids
 # List templates
 npx solana-mobile create --list-templates
 ```
+
+### Wrap a web app in an Android WebView shell
+
+Wraps an existing web app or PWA in a native Android WebView project. The generated app opens `solana-wallet:` links
+in the installed wallet app, so Mobile Wallet Adapter flows keep working inside the shell. `--manifest` accepts a web
+`manifest.json` or a Bubblewrap `twa-manifest.json` (local path or URL) and seeds the app name, application id, icons,
+and colors from it.
+
+```bash
+# Generate a project, answering prompts for the missing values
+npx solana-mobile webshell init my-app --url https://example.com
+
+# Seed the project from a manifest instead
+npx solana-mobile webshell init my-app --manifest https://example.com/manifest.json
+
+# Build the signed release APK
+npx solana-mobile webshell build my-app
+
+# Build without password prompts
+SOLANA_MOBILE_KEYSTORE_PASSWORD=secret SOLANA_MOBILE_KEY_PASSWORD=secret npx solana-mobile webshell build my-app
+
+# Show the full Gradle stack trace on failure
+npx solana-mobile webshell build my-app --stacktrace
+```
+
+Every value resolves flag > manifest > prompt, so `init` also takes `--app-name`, `--application-id`,
+`--version-code`, `--version-name`, `--keystore-path`, and `--keystore-alias` (plus `--force` to overwrite a non-empty
+directory) — anything still missing is prompted for. The signing keystore is created when it does not exist yet, and
+the passwords are read from `SOLANA_MOBILE_KEYSTORE_PASSWORD` and `SOLANA_MOBILE_KEY_PASSWORD` or prompted for; they
+are never stored. Building runs the project's own Gradle wrapper and requires JDK 17+ and the Android SDK — the CLI
+does not install them, so a missing toolchain surfaces as Gradle's own error.
 
 ### Check your environment
 

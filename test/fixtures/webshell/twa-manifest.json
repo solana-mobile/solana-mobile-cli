@@ -1,0 +1,21 @@
+{
+  "appVersionCode": 12,
+  "appVersionName": "1.2.0",
+  "backgroundColor": "#ffffff",
+  "display": "standalone",
+  "fallbackType": "customtabs",
+  "generatorApp": "bubblewrap-cli",
+  "host": "app.example.com",
+  "iconUrl": "https://app.example.com/icons/icon-512.png",
+  "launcherName": "Wallet Shell",
+  "name": "Wallet Shell for Android",
+  "orientation": "default",
+  "packageId": "com.example.walletshell",
+  "signingKey": {
+    "alias": "release",
+    "path": "./release.keystore"
+  },
+  "startUrl": "/launch?mode=prod",
+  "themeColor": "#9945ff",
+  "webManifestUrl": "https://app.example.com/manifest.json"
+}

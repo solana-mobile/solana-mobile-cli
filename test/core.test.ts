@@ -283,6 +283,7 @@ describe('app', () => {
       'emulator',
       'localnet',
       'templates',
+      'webshell',
     ])
   })
 
