@@ -5,6 +5,7 @@ export const NO_CONNECTED_DEVICES_MESSAGE = 'No connected Android devices or emu
  * offered all the same, just without a description.
  */
 export const KNOWN_DEVICE_PORTS: Record<number, string> = {
+  4747: 'Solana Mobile Playground',
   8081: 'Metro / Expo dev server',
   8899: 'Solana RPC',
   8900: 'Solana WebSocket',

@@ -16,6 +16,10 @@
     "@biomejs/biome": "2.4.6",
     "@changesets/cli": "2.30.0",
     "@intellectronica/ruler": "0.3.38",
+    "@solana-mobile/mobile-wallet-adapter-protocol": "2.3.0",
+    "@solana-mobile/mobile-wallet-adapter-protocol-kit": "0.4.0",
+    "@solana-program/system": "0.13.0",
+    "@solana/kit": "7.1.1",
     "@types/bun": "1.3.13",
     "lefthook": "2.1.5",
     "pkg-pr-new": "0.0.62",
@@ -47,7 +51,8 @@
     "url": "git+https://github.com/solana-mobile/solana-mobile-cli.git"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "bun run build:playground && tsdown",
+    "build:playground": "bun scripts/build-playground-page.ts",
     "changeset": "changeset",
     "check-types": "tsc -b --noEmit",
     "ci": "bun run build && bun run lint && bun run check-types && bun run test",
