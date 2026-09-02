@@ -17,7 +17,8 @@
     }
   },
   "files": {
-    "ignoreUnknown": false
+    "ignoreUnknown": false,
+    "includes": ["**", "!templates"]
   },
   "formatter": {
     "attributePosition": "auto",

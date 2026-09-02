@@ -36,7 +36,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "templates"
   ],
   "homepage": "https://github.com/solana-mobile/solana-mobile-cli#readme",
   "license": "Apache-2.0",

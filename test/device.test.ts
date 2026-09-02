@@ -286,7 +286,7 @@ describe('runDeviceOpen', () => {
     const { calls, runCommand } = recordingRunner(oneDeviceWorld)
     const { dependencies } = openDependencies(runCommand)
 
-    await runDeviceOpen({ url: 'https://solanamobile.com' }, dependencies)
+    await runDeviceOpen({ url: 'https://example.com' }, dependencies)
 
     expect(commandsMatching(calls, 'reverse')).toEqual([])
     expect(commandsMatching(calls, 'am')).toHaveLength(1)
@@ -306,7 +306,7 @@ describe('runDeviceOpen', () => {
     const runSelect: SelectPrompt = async () => 'emulator-5554'
     const { dependencies } = openDependencies(runCommand, { runSelect })
 
-    await runDeviceOpen({ url: 'https://solanamobile.com' }, dependencies)
+    await runDeviceOpen({ url: 'https://example.com' }, dependencies)
 
     expect(commandsMatching(calls, 'am').at(0)?.at(2)).toBe('emulator-5554')
   })
@@ -344,8 +344,8 @@ describe('runDeviceOpen', () => {
         world: oneDeviceWorld,
       },
       {
-        expected: 'Not forwarding: https://solanamobile.com/ does not name an explicit localhost port',
-        options: { url: 'https://solanamobile.com/', verbose: true },
+        expected: 'Not forwarding: https://example.com/ does not name an explicit localhost port',
+        options: { url: 'https://example.com/', verbose: true },
         world: oneDeviceWorld,
       },
       {

@@ -1,6 +1,14 @@
 export type CommandRunner = (cmd: [string, ...string[]], options?: RunCommandOptions) => Promise<string>
 
-export type InteractiveCommandRunner = (cmd: [string, ...string[]]) => Promise<void>
+export type InteractiveCommandRunner = (
+  cmd: [string, ...string[]],
+  options?: InteractiveRunCommandOptions,
+) => Promise<void>
+
+export interface InteractiveRunCommandOptions {
+  cwd?: string
+  env?: Record<string, string>
+}
 
 export interface RunCommandOptions {
   /**
@@ -9,5 +17,6 @@ export interface RunCommandOptions {
    * drops half the diagnostics.
    */
   combineOutput?: boolean
+  env?: Record<string, string>
   stdin?: string
 }

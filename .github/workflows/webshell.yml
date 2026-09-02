@@ -1,0 +1,72 @@
+name: Webshell
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/webshell.yml
+      - src/webshell/**
+      - templates/webshell-android/**
+
+  # Gradle resolves the template's dependencies from live repositories, which can break with no
+  # pull request attached, so exercise the full build on a schedule too.
+  schedule:
+    - cron: "0 6 * * *"
+
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # CI-only throwaway values: the keystore is generated fresh and discarded with the runner.
+      SOLANA_MOBILE_KEYSTORE_PASSWORD: ci-password
+      SOLANA_MOBILE_KEY_PASSWORD: ci-password
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup
+
+      - name: Setup Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android packages
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;37.0.0'
+
+      - name: Build the CLI
+        run: bun run build
+
+      # Everything generated lands in $RUNNER_TEMP so the setup action's dirty-repo check stays
+      # meaningful. Fully flagged, so the init must complete without a single prompt.
+      - name: Generate a project
+        run: >
+          node dist/cli.mjs webshell init "$RUNNER_TEMP/smoke"
+          --app-name Smoke
+          --application-id com.example.smoke
+          --keystore-alias smoke
+          --keystore-path "$RUNNER_TEMP/smoke.keystore"
+          --skip-version-check
+          --url https://example.com
+          --version-code 1
+          --version-name 1.0
+
+      - name: Build the APK
+        run: node dist/cli.mjs webshell build "$RUNNER_TEMP/smoke" --stacktrace --skip-version-check
+
+      # The keystore and alias are configured, so the build signs and reports this exact path.
+      - name: Assert the release APK exists
+        run: test -f "$RUNNER_TEMP/smoke/app/build/outputs/apk/release/app-release.apk"
