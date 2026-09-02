@@ -450,7 +450,7 @@ describe('resolveApkArgs', () => {
   test('rejects a directory without .apk files', async () => {
     const emptyFs = { ...fakeFs, listDirectory: async () => ['notes.txt'] }
 
-    expect(resolveApkArgs(['empty'], emptyFs)).rejects.toThrow('No .apk files found in directory: empty')
+    await expect(resolveApkArgs(['empty'], emptyFs)).rejects.toThrow('No .apk files found in directory: empty')
   })
 
   test('resolves a catalog name when nothing exists on disk', async () => {
@@ -462,7 +462,7 @@ describe('resolveApkArgs', () => {
   })
 
   test('rejects an unknown name and lists the catalog', async () => {
-    expect(resolveApkArgs(['fakewalet'], fakeFs)).rejects.toThrow(
+    await expect(resolveApkArgs(['fakewalet'], fakeFs)).rejects.toThrow(
       'Not a file, directory, or catalog APK: fakewalet\nCatalog APKs: fakewallet',
     )
   })
@@ -493,13 +493,13 @@ describe('installApk', () => {
   test('resolves on Success output', async () => {
     const { runCommand } = recordingRunner(() => 'Performing Streamed Install\nSuccess\n')
 
-    expect(installApk('SER1', 'app.apk', {}, { runCommand })).resolves.toBeUndefined()
+    await expect(installApk('SER1', 'app.apk', {}, { runCommand })).resolves.toBeUndefined()
   })
 
   test('throws the reason when adb exits zero but reports Failure', async () => {
     const { runCommand } = recordingRunner(() => 'Failure [INSTALL_FAILED_VERSION_DOWNGRADE]')
 
-    expect(installApk('SER1', 'app.apk', {}, { runCommand })).rejects.toThrow('INSTALL_FAILED_VERSION_DOWNGRADE')
+    await expect(installApk('SER1', 'app.apk', {}, { runCommand })).rejects.toThrow('INSTALL_FAILED_VERSION_DOWNGRADE')
   })
 
   test('throws the reason extracted from a rejecting adb', async () => {
@@ -507,7 +507,9 @@ describe('installApk', () => {
       throw new Error('adb: failed to install app.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]')
     })
 
-    expect(installApk('SER1', 'app.apk', {}, { runCommand })).rejects.toThrow('INSTALL_FAILED_UPDATE_INCOMPATIBLE')
+    await expect(installApk('SER1', 'app.apk', {}, { runCommand })).rejects.toThrow(
+      'INSTALL_FAILED_UPDATE_INCOMPATIBLE',
+    )
   })
 })
 

@@ -528,7 +528,7 @@ describe('app', () => {
       ?.exitOverride()
       .configureOutput({ writeErr: () => {}, writeOut: () => {} })
 
-    expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--engine', 'geyser'])).rejects.toThrow(
+    await expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--engine', 'geyser'])).rejects.toThrow(
       'Unknown localnet engine: geyser',
     )
   })
@@ -1020,7 +1020,7 @@ describe('app', () => {
   test('rejects combining --minimal with --template', async () => {
     const app = createAppWithSilencedCreateCommand()
 
-    expect(
+    await expect(
       app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--minimal', '--template', 'expo-kit-wallet']),
     ).rejects.toThrow(`The --minimal flag can't be used in combination with --template`)
   })
@@ -1028,7 +1028,7 @@ describe('app', () => {
   test('rejects template options that are not boolean long flags', async () => {
     const app = createAppWithSilencedCreateCommand()
 
-    expect(app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--reset-project=yes'])).rejects.toThrow(
+    await expect(app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--reset-project=yes'])).rejects.toThrow(
       'Template options must be boolean long flags',
     )
   })
@@ -1036,7 +1036,9 @@ describe('app', () => {
   test('rejects extra arguments', async () => {
     const app = createAppWithSilencedCreateCommand()
 
-    expect(app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', 'extra'])).rejects.toThrow('too many arguments')
+    await expect(app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', 'extra'])).rejects.toThrow(
+      'too many arguments',
+    )
   })
 
   test('rejects template options placed after the -- separator as excess arguments', async () => {
@@ -1044,7 +1046,7 @@ describe('app', () => {
     // separator before the extraction could see it
     const app = createAppWithSilencedCreateCommand()
 
-    expect(
+    await expect(
       app.parseAsync(['node', 'solana-mobile', 'create', '--', 'sentinel-app', '--reset-project']),
     ).rejects.toThrow('too many arguments')
   })
