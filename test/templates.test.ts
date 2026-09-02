@@ -699,7 +699,7 @@ describe('templates sync', () => {
       }),
     })
 
-    expect(planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
+    await expect(planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
       'Target repository does not declare a group with path "mobile"',
     )
   })
@@ -708,7 +708,7 @@ describe('templates sync', () => {
     const source = createRepo({ 'package.json': repositoryManifest })
     const target = createRepo({ 'package.json': repositoryManifest })
 
-    expect(planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
+    await expect(planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
       'Source repository has no tracked files under "mobile"',
     )
   })
@@ -716,7 +716,7 @@ describe('templates sync', () => {
   test('throws when source and target are the same directory', async () => {
     const root = createRepo({ 'package.json': repositoryManifest })
 
-    expect(planTemplateSync(root, root, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
+    await expect(planTemplateSync(root, root, { listIgnoredFiles, listTrackedFiles })).rejects.toThrow(
       'Source and target repositories are the same directory',
     )
   })
