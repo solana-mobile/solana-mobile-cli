@@ -62,6 +62,12 @@ import {
   runLocalnetStop,
 } from './localnet/localnet-feature-index.ts'
 import {
+  type PlaygroundClusterId,
+  type PlaygroundCommandOptions,
+  parsePlaygroundClusterId,
+  runPlayground,
+} from './playground/playground-feature-index.ts'
+import {
   runTemplatesCheck,
   runTemplatesGenerate,
   runTemplatesSync,
@@ -99,6 +105,7 @@ export type AppOptions = {
   runLocalnetStop?: (options: LocalnetStopCommandOptions) => Promise<void>
   runCreate?: (options: CreateCommandOptions) => Promise<void>
   runDoctor?: (options: DoctorCommandOptions) => Promise<number>
+  runPlayground?: (options: PlaygroundCommandOptions) => Promise<void>
   runTemplatesCheck?: (options: TemplatesCheckCommandOptions) => Promise<void>
   runTemplatesGenerate?: (options: TemplatesGenerateCommandOptions) => Promise<void>
   runTemplatesSync?: (options: TemplatesSyncCommandOptions) => Promise<void>
@@ -129,6 +136,7 @@ export function createApp({
   runLocalnetStop: runLocalnetStopCommand = runLocalnetStop,
   runCreate: runCreateCommand = runCreate,
   runDoctor: runDoctorCommand = runDoctor,
+  runPlayground: runPlaygroundCommand = runPlayground,
   runTemplatesCheck: runTemplatesCheckCommand = runTemplatesCheck,
   runTemplatesGenerate: runTemplatesGenerateCommand = runTemplatesGenerate,
   runTemplatesSync: runTemplatesSyncCommand = runTemplatesSync,
@@ -429,6 +437,19 @@ export function createApp({
     await runLocalnetStopCommand(toLocalnetTargetOptions(localnetOptions(command)))
   })
 
+  app
+    .command('playground')
+    .description('Serve a wallet testing page and open it on a connected device')
+    .option('--cluster <cluster>', 'Cluster: devnet, localnet, mainnet, or testnet', parseClusterOption)
+    .option('--device <serial>', 'Target a device serial')
+    .option('--no-open', 'Do not open the page on the device')
+    .option('--port <port>', 'Host port for the playground server', parseIntegerOption)
+    .option('--url <url>', 'Custom RPC URL for the selected cluster')
+    .option('-v, --verbose', 'Verbose output')
+    .action(async (options: PlaygroundCommandOptions) => {
+      await runPlaygroundCommand(options)
+    })
+
   const templatesCommand = app.command('templates').description('Manage template repositories')
 
   templatesCommand.action(() => {
@@ -615,6 +636,14 @@ export async function runApp(argv = process.argv, options: AppOptions = {}) {
 function parseEngineOption(value: string): LocalnetEngineId {
   try {
     return parseLocalnetEngineId(value)
+  } catch (error) {
+    throw new InvalidArgumentError(error instanceof Error ? error.message : String(error))
+  }
+}
+
+function parseClusterOption(value: string): PlaygroundClusterId {
+  try {
+    return parsePlaygroundClusterId(value)
   } catch (error) {
     throw new InvalidArgumentError(error instanceof Error ? error.message : String(error))
   }

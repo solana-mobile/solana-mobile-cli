@@ -282,6 +282,7 @@ describe('app', () => {
       'doctor',
       'emulator',
       'localnet',
+      'playground',
       'templates',
       'webshell',
     ])
