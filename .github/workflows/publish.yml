@@ -96,14 +96,25 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup
 
+      # The version must land in package.json before the build: the bundle inlines it, so a
+      # post-build bump would publish a canary whose --version still reports the old release.
+      - name: Create canary version
+        run: bun x changeset version --snapshot canary
+
       - name: Build
         run: bun run build
 
       - name: Check package
         run: bun x publint
 
-      - name: Create canary version
-        run: bun x changeset version --snapshot canary
+      - name: Verify bundled version matches package.json
+        run: |
+          expected="$(node -p "require('./package.json').version")"
+          actual="$(node dist/cli.mjs --version)"
+          if [ "$actual" != "$expected" ]; then
+            echo "dist/cli.mjs reports '$actual' but package.json version is '$expected'"
+            exit 1
+          fi
 
       - name: Publish canary to NPM
         run: bun x changeset publish --tag canary
