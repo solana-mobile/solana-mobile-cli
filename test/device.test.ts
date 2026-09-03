@@ -410,8 +410,8 @@ describe('runDeviceOpen', () => {
   })
 })
 
-const FAKEWALLET_SHA256 = '8b19cd916d30da8c4b2410a074fa59feb680cfd5292a32a4830ffd4ceb5a8ac8'
-const FAKEWALLET_TAG = '@solana-mobile/wallet-adapter-mobile@2.2.9'
+const FAKEWALLET_SHA256 = '550055426683c88aac246bef442bc8a37fe4986dca0b1ef475337dd7be6746e9'
+const FAKEWALLET_TAG = '@solana-mobile/wallet-adapter-mobile@2.3.0'
 const FAKEWALLET_URL = `https://github.com/solana-mobile/mobile-wallet-adapter/releases/download/${encodeURIComponent(FAKEWALLET_TAG)}/fakewallet-v1-release.apk`
 
 describe('apk-catalog', () => {
@@ -424,7 +424,7 @@ describe('apk-catalog', () => {
     const source = findApkCatalogEntry('fakewallet')?.source
 
     expect(source && githubReleaseDownloadUrl(source)).toBe(
-      'https://github.com/solana-mobile/mobile-wallet-adapter/releases/download/%40solana-mobile%2Fwallet-adapter-mobile%402.2.9/fakewallet-v1-release.apk',
+      'https://github.com/solana-mobile/mobile-wallet-adapter/releases/download/%40solana-mobile%2Fwallet-adapter-mobile%402.3.0/fakewallet-v1-release.apk',
     )
   })
 })
