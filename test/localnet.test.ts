@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { createApp } from '../src/app.ts'
 import type { CommandRunner } from '../src/core/data-access/command-types.ts'
 import { runExecutable } from '../src/core/data-access/run-executable.ts'
 import { parseAdbReverses, parseTcpPort } from '../src/localnet/data-access/adb-reverse.ts'
@@ -22,6 +23,10 @@ import {
 import type {
   AdbDevice,
   AdbReverseEntry,
+  LocalnetForwardCommandOptions,
+  LocalnetStartCommandOptions,
+  LocalnetStatusCommandOptions,
+  LocalnetStopCommandOptions,
   OwnedForward,
   ResolvedLocalnetPort,
 } from '../src/localnet/data-access/localnet-types.ts'
@@ -42,6 +47,7 @@ import {
 import { parseProbeExitCode, probeDevicePort } from '../src/localnet/data-access/probe-device-port.ts'
 import { probeRpc } from '../src/localnet/data-access/probe-rpc.ts'
 import { waitForAbort } from '../src/localnet/data-access/watch-forwards.ts'
+import { createLocalnetCommand } from '../src/localnet/localnet-feature.ts'
 import { createLocalnetCheckReport } from '../src/localnet/localnet-feature-check.ts'
 import { runLocalnetStart } from '../src/localnet/localnet-feature-start.ts'
 import { createLocalnetStatusReport } from '../src/localnet/localnet-feature-status.ts'
@@ -1175,5 +1181,173 @@ describe('localnet forward ownership', () => {
     expect(matchReverse([{ devicePort: 8899, hostPort: 9000 }], rpc)).toEqual({ hostPort: 9000, kind: 'mismatch' })
     expect(matchReverse([{ devicePort: 8900, hostPort: 8900 }], rpc)).toEqual({ kind: 'missing' })
     expect(matchReverse(undefined, rpc)).toEqual({ kind: 'missing' })
+  })
+})
+
+describe('localnet command', () => {
+  // The command tree stands on its own, so its shape is asserted straight off the factory. Everything
+  // below parses through the real root instead: the flags-on-either-side behaviour depends on the
+  // settings `createApp` applies to the tree, so a hand-rolled root would only test the hand-rolled root.
+  test('registers localnet subcommands', () => {
+    expect(createLocalnetCommand().commands.map((command) => command.name())).toEqual([
+      'start',
+      'check',
+      'forward',
+      'logs',
+      'status',
+      'stop',
+    ])
+  })
+
+  test('runs localnet start when no subcommand is given, watching by default', async () => {
+    const startOptions: LocalnetStartCommandOptions[] = []
+    const app = createApp({
+      runLocalnetStart: async (options) => {
+        startOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'localnet'])
+
+    expect(startOptions).toEqual([
+      {
+        detach: undefined,
+        devices: [],
+        engine: undefined,
+        image: undefined,
+        port: undefined,
+        studioPort: undefined,
+        watch: true,
+        wsPort: undefined,
+      },
+    ])
+  })
+
+  test('disables watching with --no-watch', async () => {
+    const startOptions: LocalnetStartCommandOptions[] = []
+    const app = createApp({
+      runLocalnetStart: async (options) => {
+        startOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'localnet', 'start', '--no-watch', '--detach'])
+
+    expect(startOptions[0]?.watch).toBe(false)
+    expect(startOptions[0]?.detach).toBe(true)
+  })
+
+  test('accepts localnet options on either side of the subcommand', async () => {
+    // Regression guard: `localnet` and its subcommands declare the same flags, and commander stores each
+    // flag on whichever level parsed it. Reading only the subcommand's own options silently dropped
+    // everything written before the subcommand — `localnet --detach start` ran attached.
+    const startOptions: LocalnetStartCommandOptions[] = []
+    const parse = (argv: string[]) =>
+      createApp({
+        runLocalnetStart: async (options) => {
+          startOptions.push(options)
+        },
+      }).parseAsync(['node', 'solana-mobile', ...argv])
+
+    const flags = ['--detach', '--no-watch', '--device', 'emulator-5554', '--port', '9899']
+
+    await parse(['localnet', 'start', ...flags])
+    await parse(['localnet', ...flags, 'start'])
+
+    // Both placements have to produce the same options, defaults included.
+    expect(startOptions[1]).toEqual(startOptions[0] as LocalnetStartCommandOptions)
+    expect(startOptions[0]).toMatchObject({ detach: true, devices: ['emulator-5554'], port: 9899, watch: false })
+  })
+
+  test('passes localnet target options written before the subcommand to every subcommand', async () => {
+    const statusOptions: LocalnetStatusCommandOptions[] = []
+    const stopOptions: LocalnetStopCommandOptions[] = []
+    const app = createApp({
+      runLocalnetStatus: async (options) => {
+        statusOptions.push(options)
+      },
+      runLocalnetStop: async (options) => {
+        stopOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'localnet',
+      '--engine',
+      'test-validator',
+      '--port',
+      '9899',
+      'status',
+    ])
+    await app.parseAsync(['node', 'solana-mobile', 'localnet', '--engine', 'test-validator', 'stop'])
+
+    expect(statusOptions[0]).toMatchObject({ engine: 'test-validator', port: 9899 })
+    expect(stopOptions[0]).toMatchObject({ engine: 'test-validator' })
+  })
+
+  test('collects repeatable localnet device options and host port overrides', async () => {
+    const forwardOptions: LocalnetForwardCommandOptions[] = []
+    const app = createApp({
+      runLocalnetForward: async (options) => {
+        forwardOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'localnet',
+      'forward',
+      '--device',
+      'emulator-5554',
+      '--device',
+      '39281FDJH00KL2',
+      '--port',
+      '9899',
+      '--watch',
+    ])
+
+    expect(forwardOptions[0]?.devices).toEqual(['emulator-5554', '39281FDJH00KL2'])
+    expect(forwardOptions[0]?.port).toBe(9899)
+    expect(forwardOptions[0]?.watch).toBe(true)
+  })
+
+  test('inherits the root command settings through addCommand', async () => {
+    // Commander copies the root's settings into commands made with `command()` but not into ones passed
+    // to `addCommand`, so a feature-owned command silently drops `showHelpAfterError` (and
+    // `enablePositionalOptions`) unless `createApp` copies them back. Without that copy this prints the
+    // bare error line and nothing else.
+    const errors: string[] = []
+    const app = createApp({ runLocalnetStart: async () => {} })
+
+    app.exitOverride()
+    app.configureOutput({ writeErr: (text) => errors.push(text), writeOut: () => {} })
+    app.commands
+      .find((command) => command.name() === 'localnet')
+      ?.exitOverride()
+      .configureOutput({ writeErr: (text) => errors.push(text), writeOut: () => {} })
+
+    await expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--bogus'])).rejects.toThrow(
+      "unknown option '--bogus'",
+    )
+
+    expect(errors.join('')).toContain('Usage: solana-mobile localnet')
+  })
+
+  test('rejects an unknown localnet engine', async () => {
+    const app = createApp({ runLocalnetStart: async () => {} })
+
+    app.exitOverride()
+    app.configureOutput({ writeErr: () => {}, writeOut: () => {} })
+    app.commands
+      .find((command) => command.name() === 'localnet')
+      ?.exitOverride()
+      .configureOutput({ writeErr: () => {}, writeOut: () => {} })
+
+    await expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--engine', 'geyser'])).rejects.toThrow(
+      'Unknown localnet engine: geyser',
+    )
   })
 })
