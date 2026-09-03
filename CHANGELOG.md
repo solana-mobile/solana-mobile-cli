@@ -1,5 +1,23 @@
 # solana-mobile
 
+## 0.4.0
+
+### Minor Changes
+
+- c7814e1: Add a `playground` command that serves a bundled wallet-testing web page, forwards it to a connected device with `adb reverse`, opens it in the device browser, and streams each Mobile Wallet Adapter interaction back to the terminal until interrupted. The page exercises connect, sign-in (SIWS), sign message, sign transaction, and sign-and-send against a chosen cluster (`--cluster devnet|testnet|mainnet|localnet`, default devnet, with `--url` to override the RPC endpoint), replacing the scaffold-an-app-and-throw-it-away loop for quick wallet testing.
+- c15b7b2: Add `device tune`, the `device` namespace twin of `emulator tune`, so the agent-friendly tweaks no longer depend on `emulator start --tune` or `emulator create --start --tune`. It targets devices the way the other `device` commands do: no target picks the only connected device or prompts when several are connected, `--device <serial>` targets one, and `--all` tunes every connected device. Unlike `emulator tune` it also accepts physical devices, and a tweak the device rejects is reported as skipped instead of failing the run.
+
+  Both `device tune` and `emulator tune` now ask which tweaks to apply, with every tweak pre-selected so Enter applies the lot; `-y, --yes` skips the picker and applies all of them for unattended runs. The `--tune` flags on `emulator create` and `emulator start` stay non-interactive and apply every tweak.
+
+- 3309dd0: Make emulator tuning opt-in. **Breaking:** the `--no-tune` flag is removed from `emulator create` and `emulator start`; `emulator start` and `emulator create --start` no longer apply the agent-friendly tweaks automatically. Pass `--tune` to apply them after boot, or run `emulator tune` against a running emulator. Passing `--tune` to `emulator create` without `--start` is now rejected instead of silently ignored.
+- 1e4137a: Add `webshell init` and `webshell build`: generate and build an Android WebView wrapper around an existing web app or PWA (ports @solana-mobile/webshell-cli into this CLI).
+
+### Patch Changes
+
+- ef43783: Fix `emulator create` and `emulator delete` hanging forever when their work failed. Both wrapped the work in clack's `tasks()`, which stops its spinner only once the task resolves; a rejecting task left the spinner running, and a live spinner keeps a timer and a raw-mode stdin listener attached, so the process never exited even though the error was printed and the exit code was set. Both now report the failure after the task group completes. `emulator delete` is also idempotent: deleting an emulator that is not installed reports `Emulator not installed: <name>` and exits 0 instead of failing, so "remove any leftover, then create" no longer needs to probe the AVD directory first.
+- b40628e: Bump the `fakewallet` catalog pin to `@solana-mobile/wallet-adapter-mobile@2.3.0`. The previously pinned `2.2.9` build had no localnet support — `chainOrClusterToRpcUri` only knew mainnet, devnet and testnet and threw `IllegalArgumentException` for anything else — so a wallet installed with `device install fakewallet` could not sign against a local validator. Localnet sign-and-send landed in [mobile-wallet-adapter#1610](https://github.com/solana-mobile/mobile-wallet-adapter/pull/1610) and first shipped in `2.3.0`.
+- fd4c90f: Remove the SDK licenses check from the doctor command. Android SDK Command-line Tools v23 deprecated `sdkmanager` and turned `sdkmanager --licenses` into a no-op that prints "The --licenses option is no longer needed", so license acceptance is no longer a separate step the doctor can or needs to verify.
+
 ## 0.3.0
 
 ### Minor Changes
