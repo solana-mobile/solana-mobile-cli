@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from 'bun:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { tasks } from '@clack/prompts'
 import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
 import { createAvdConfigValues, parseAvdConfig } from '../src/emulator/data-access/avd-config.ts'
 import { createAvd } from '../src/emulator/data-access/create-avd.ts'
@@ -42,6 +43,31 @@ const NO_INSTALLED_SYSTEM_IMAGES_MESSAGE = [
 
 async function createTemporaryDirectory(prefix: string): Promise<string> {
   return mkdtemp(join(tmpdir(), prefix))
+}
+
+/**
+ * Mirrors `@clack/prompts`' `tasks()`, which starts a spinner, awaits the task, and only then stops the spinner. A
+ * rejecting task therefore leaves the spinner running, and a live clack spinner holds the event loop open forever.
+ * Comparing `started` against `stopped` is how a leaked spinner shows up in a test instead of as a hung CLI.
+ */
+function createSpinnerAwareTasks() {
+  const started: string[] = []
+  const stopped: string[] = []
+
+  return {
+    started,
+    stopped,
+    tasks: async (list: Parameters<typeof tasks>[0]) => {
+      for (const task of list) {
+        if (task.enabled === false) {
+          continue
+        }
+
+        started.push(task.title)
+        stopped.push((await task.task(() => {})) || task.title)
+      }
+    },
+  }
 }
 
 async function installAndroidCommandLineTool(sdkRoot: string, tool: string, version = 'latest') {
@@ -1352,6 +1378,44 @@ Available packages:
     }
   })
 
+  test('stops the create spinner and exits when avdmanager cannot create the emulator', async () => {
+    const rootDirectory = await createTemporaryDirectory('solana-mobile-avd-create-failure-')
+    const homeDirectory = join(rootDirectory, 'home')
+    const sdkRoot = join(rootDirectory, 'sdk')
+    const systemImage = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const taskRunner = createSpinnerAwareTasks()
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager')
+      await installSystemImage(sdkRoot, systemImage)
+
+      await runEmulatorCreate(
+        { name: 'broken_phone', sdkRoot, systemImage },
+        {
+          cancel: (message) => cancellations.push(message),
+          getHomeDirectory: () => homeDirectory,
+          runCommand: async () => {
+            throw new Error('No device found matching --device totally-not-a-real-device-profile.')
+          },
+          runText: async () => {
+            throw new Error('Unexpected emulator name prompt.')
+          },
+          tasks: taskRunner.tasks,
+        },
+      )
+
+      expect(taskRunner.started).toEqual(['Creating emulator: broken_phone'])
+      expect(taskRunner.stopped).toEqual(['Could not create emulator: broken_phone'])
+      expect(cancellations).toEqual(['Error: No device found matching --device totally-not-a-real-device-profile.'])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+      await rm(rootDirectory, { force: true, recursive: true })
+    }
+  })
+
   test('rejects --tune without --start when creating an emulator', async () => {
     const cancels: string[] = []
     const previousExitCode = process.exitCode
@@ -1390,7 +1454,9 @@ Available packages:
   test('deletes installed emulators through avdmanager', async () => {
     const commands: Array<[string, ...string[]]> = []
 
-    await deleteInstalledAvds(['Alpha', 'Beta'], '/sdk', {
+    const result = await deleteInstalledAvds(['Alpha', 'Beta'], '/sdk', {
+      getHomeDirectory: () => '/home',
+      pathExists: async () => true,
       runCommand: async (cmd) => {
         commands.push(cmd)
         return ''
@@ -1401,6 +1467,59 @@ Available packages:
       ['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Alpha'],
       ['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Beta'],
     ])
+    expect(result).toEqual({ deleted: ['Alpha', 'Beta'], failures: [], notInstalled: [] })
+  })
+
+  test('reports emulators with nothing on disk as not installed without calling avdmanager', async () => {
+    const commands: Array<[string, ...string[]]> = []
+
+    const result = await deleteInstalledAvds(['Alpha', 'Ghost'], '/sdk', {
+      getHomeDirectory: () => '/home',
+      pathExists: async (filePath) => filePath.includes('Alpha'),
+      runCommand: async (cmd) => {
+        commands.push(cmd)
+        return ''
+      },
+    })
+
+    expect(commands).toEqual([['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Alpha']])
+    expect(result).toEqual({ deleted: ['Alpha'], failures: [], notInstalled: ['Ghost'] })
+  })
+
+  test('deletes a half-written emulator that only has a registration file', async () => {
+    const commands: Array<[string, ...string[]]> = []
+
+    const result = await deleteInstalledAvds(['Alpha'], '/sdk', {
+      getHomeDirectory: () => '/home',
+      pathExists: async (filePath) => filePath.endsWith('Alpha.ini'),
+      runCommand: async (cmd) => {
+        commands.push(cmd)
+        return ''
+      },
+    })
+
+    expect(commands).toEqual([['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Alpha']])
+    expect(result).toEqual({ deleted: ['Alpha'], failures: [], notInstalled: [] })
+  })
+
+  test('reports per-emulator avdmanager failures instead of throwing', async () => {
+    const result = await deleteInstalledAvds(['Alpha', 'Beta'], '/sdk', {
+      getHomeDirectory: () => '/home',
+      pathExists: async () => true,
+      runCommand: async (cmd) => {
+        if (cmd.includes('Beta')) {
+          throw new Error('avdmanager exploded')
+        }
+
+        return ''
+      },
+    })
+
+    expect(result).toEqual({
+      deleted: ['Alpha'],
+      failures: ['Beta: avdmanager exploded'],
+      notInstalled: [],
+    })
   })
 
   test('refuses to delete a running emulator with an invocation-aware stop command', async () => {
@@ -1441,6 +1560,76 @@ Available packages:
         ['adb', 'devices'],
         ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
       ])
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('stops the delete spinner and exits when avdmanager cannot delete the emulator', async () => {
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const taskRunner = createSpinnerAwareTasks()
+
+    try {
+      await runEmulatorDelete(
+        { names: ['Alpha'], sdkRoot: '/sdk' },
+        {
+          cancel: (message) => cancellations.push(message),
+          getHomeDirectory: () => '/home',
+          pathExists: async () => true,
+          runCommand: async (cmd) => {
+            if (cmd.join(' ') === 'adb devices') {
+              return 'List of devices attached\n'
+            }
+
+            throw new Error('avdmanager delete avd failed')
+          },
+          tasks: taskRunner.tasks,
+        },
+      )
+
+      expect(taskRunner.started).toEqual(['Deleting Alpha'])
+      expect(taskRunner.stopped).toEqual(['Could not delete emulator: Alpha'])
+      expect(cancellations).toEqual([
+        'Error: Some emulators could not be deleted:\n- Alpha: avdmanager delete avd failed',
+      ])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('treats deleting an emulator that is not installed as a success', async () => {
+    const previousExitCode = process.exitCode
+    const commands: Array<[string, ...string[]]> = []
+    const outros: string[] = []
+    const taskRunner = createSpinnerAwareTasks()
+
+    try {
+      process.exitCode = 0
+
+      await runEmulatorDelete(
+        { names: ['Ghost'], sdkRoot: '/sdk' },
+        {
+          cancel: (message) => {
+            throw new Error(`Unexpected cancel: ${message}`)
+          },
+          getHomeDirectory: () => '/home',
+          outro: (message) => outros.push(message),
+          pathExists: async () => false,
+          runCommand: async (cmd) => {
+            commands.push(cmd)
+            return 'List of devices attached\n'
+          },
+          tasks: taskRunner.tasks,
+        },
+      )
+
+      expect(taskRunner.started).toEqual(['Deleting Ghost'])
+      expect(taskRunner.stopped).toEqual(['Emulator not installed: Ghost'])
+      expect(commands).toEqual([['adb', 'devices']])
+      expect(outros).toEqual(['Done'])
+      expect(process.exitCode).toBe(0)
     } finally {
       process.exitCode = previousExitCode ?? 0
     }

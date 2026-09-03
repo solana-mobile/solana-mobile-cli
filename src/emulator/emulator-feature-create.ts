@@ -113,33 +113,52 @@ export async function runEmulatorCreate(
       }
     }
 
-    let result!: CreateAvdResult
+    /**
+     * The task below must never reject: `tasks()` stops its spinner only once the task resolves, and a live clack
+     * spinner keeps a `setInterval` and a raw-mode stdin listener attached, which holds the event loop open forever.
+     * The failure is captured and rethrown after `runTasks` resolves so the process can actually exit.
+     */
+    let result: CreateAvdResult | undefined
+    let failure: unknown
 
     await runTasks([
       {
         task: async () => {
-          result = await createAvd(
-            {
-              ...options,
-              name,
-              sdkRoot,
-              systemImage,
-            },
-            {
-              getHomeDirectory,
-              pathExists,
-              readDirectory,
-              readTextFile,
-              runCommand,
-              writeTextFile,
-            },
-          )
+          try {
+            result = await createAvd(
+              {
+                ...options,
+                name,
+                sdkRoot,
+                systemImage,
+              },
+              {
+                getHomeDirectory,
+                pathExists,
+                readDirectory,
+                readTextFile,
+                runCommand,
+                writeTextFile,
+              },
+            )
 
-          return result.created ? `Created emulator: ${result.name}` : `Emulator already exists: ${result.name}`
+            return result.created ? `Created emulator: ${result.name}` : `Emulator already exists: ${result.name}`
+          } catch (error) {
+            failure = error
+            return `Could not create emulator: ${name}`
+          }
         },
         title: `Creating emulator: ${name}`,
       },
     ])
+
+    if (failure) {
+      throw failure
+    }
+
+    if (!result) {
+      throw new Error(`Emulator was not created: ${name}`)
+    }
 
     if (!result.created) {
       showNote(formatCommand(`emulator delete ${result.name}`), 'Delete it first to recreate')

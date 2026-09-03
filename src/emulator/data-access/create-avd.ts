@@ -125,7 +125,16 @@ function getAvdConfigPath(homeDirectory: string, avdName: string): string {
 }
 
 export function getAvdDirectoryPath(homeDirectory: string, avdName: string): string {
-  return join(homeDirectory, '.android', 'avd', `${avdName}.avd`)
+  return join(getAvdRootDirectoryPath(homeDirectory), `${avdName}.avd`)
+}
+
+/** Registration file `avdmanager` writes beside the AVD directory; without it the AVD is invisible to the tooling. */
+export function getAvdRegistrationPath(homeDirectory: string, avdName: string): string {
+  return join(getAvdRootDirectoryPath(homeDirectory), `${avdName}.ini`)
+}
+
+function getAvdRootDirectoryPath(homeDirectory: string): string {
+  return join(homeDirectory, '.android', 'avd')
 }
 
 async function defaultReadTextFile(filePath: string) {

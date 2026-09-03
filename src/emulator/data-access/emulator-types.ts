@@ -89,7 +89,16 @@ export interface CreateAvdResult {
 }
 
 export interface DeleteInstalledAvdsDependencies {
+  getHomeDirectory?: HomeDirectoryResolver
+  pathExists?: PathChecker
   runCommand?: CommandRunner
+}
+
+export interface DeleteInstalledAvdsResult {
+  deleted: string[]
+  /** `<name>: <reason>` lines for AVDs `avdmanager` refused to delete. */
+  failures: string[]
+  notInstalled: string[]
 }
 
 export type DirectoryReader = (directoryPath: string) => Promise<readonly DirectoryEntry[]>
