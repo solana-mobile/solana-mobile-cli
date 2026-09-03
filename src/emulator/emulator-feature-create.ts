@@ -63,6 +63,12 @@ export async function runEmulatorCreate(
   try {
     showIntro('solana-mobile emulator create')
 
+    if (options.tune && !options.start) {
+      throw new Error(
+        `Cannot tune an emulator that is not started: --tune requires --start\nTune it later with: ${formatCommand('emulator tune')}`,
+      )
+    }
+
     const profile = resolveEmulatorProfile(options.profile)
     const name = options.name ?? (await promptEmulatorName(profile.name, runText))
 
@@ -153,7 +159,7 @@ export async function runEmulatorCreate(
       )
       log(`Started emulator: ${result.name}`)
 
-      if (options.tune !== false) {
+      if (options.tune) {
         await waitAndTuneEmulator(result.name, {
           formatCommand,
           log,
@@ -163,6 +169,8 @@ export async function runEmulatorCreate(
           sleep,
           timeoutMs,
         })
+      } else {
+        showNote(formatCommand(`emulator tune ${result.name}`), 'Apply agent-friendly tweaks')
       }
 
       showOutro('Done')

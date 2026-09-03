@@ -80,7 +80,7 @@ export async function runEmulatorStart(
     )
     log(`Started emulator: ${name}`)
 
-    if (options.tune !== false) {
+    if (options.tune) {
       await waitAndTuneEmulator(name, {
         formatCommand,
         log,
@@ -90,6 +90,8 @@ export async function runEmulatorStart(
         sleep,
         timeoutMs,
       })
+    } else {
+      showNote(formatCommand(`emulator tune ${name}`), 'Apply agent-friendly tweaks')
     }
 
     showOutro('Done')

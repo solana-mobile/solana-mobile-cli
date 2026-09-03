@@ -287,7 +287,7 @@ export function createApp({
     .option('--sdk-root <path>', 'Android SDK root')
     .option('--start', 'Start the emulator after creating it')
     .option('--system-image <package>', 'Android system image package')
-    .option('--no-tune', 'Skip applying emulator tweaks after starting')
+    .option('--tune', 'Apply emulator tweaks after starting (requires --start)')
     .option('-v, --verbose', 'Verbose output')
     .option('--vm-heap-mb <megabytes>', 'VM heap size in MB', parseIntegerOption)
     .action(async (name: string | undefined, options: Omit<EmulatorCreateCommandOptions, 'name'>) => {
@@ -350,7 +350,7 @@ export function createApp({
     .command('start [name]')
     .description('Start an Android emulator')
     .option('--sdk-root <path>', 'Android SDK root')
-    .option('--no-tune', 'Skip applying emulator tweaks after starting')
+    .option('--tune', 'Apply emulator tweaks after starting')
     .action(async (name: string | undefined, options: Omit<EmulatorStartCommandOptions, 'name'>) => {
       await runEmulatorStartCommand({ ...options, name })
     })
