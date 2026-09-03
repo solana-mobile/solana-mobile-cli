@@ -58,6 +58,8 @@ export interface EmulatorStopCommandOptions {
 
 export interface EmulatorTuneCommandOptions {
   nameOrSerial?: string
+  /** Skip the tweak picker and apply every tweak, for unattended runs. */
+  yes?: boolean
 }
 
 import type {
@@ -65,13 +67,9 @@ import type {
   InteractiveCommandRunner,
   RunCommandOptions,
 } from '../../core/data-access/command-types.ts'
+import type { AppliedDeviceTweaks } from '../../device/data-access/device-types.ts'
 
 export type { CommandRunner, InteractiveCommandRunner, RunCommandOptions }
-
-export interface AppliedEmulatorTweaks {
-  applied: readonly EmulatorTweak[]
-  skipped: readonly SkippedEmulatorTweak[]
-}
 
 export interface CreateAvdDependencies {
   getHomeDirectory?: HomeDirectoryResolver
@@ -108,13 +106,6 @@ export interface EmulatorStatus {
   serial?: string
   state: string
   target?: string
-}
-
-export interface EmulatorTweak {
-  // Each entry is the argument list for one `adb -s <serial> shell <...command>` invocation.
-  commands: readonly (readonly string[])[]
-  description: string
-  name: string
 }
 
 export type FileReader = (filePath: string) => Promise<string>
@@ -170,11 +161,6 @@ export interface RunningEmulator {
   serial: string
 }
 
-export interface SkippedEmulatorTweak {
-  reason: string
-  tweak: EmulatorTweak
-}
-
 export interface StartEmulatorDependencies extends ListInstalledAvdsDependencies {
   startProcess?: ProcessStarter
 }
@@ -183,7 +169,7 @@ export interface StopEmulatorDependencies extends ListRunningEmulatorsDependenci
 
 export interface TuneEmulatorDependencies extends ListRunningEmulatorsDependencies {}
 
-export interface TuneEmulatorResult extends AppliedEmulatorTweaks {
+export interface TuneEmulatorResult extends AppliedDeviceTweaks {
   emulator: RunningEmulator
 }
 

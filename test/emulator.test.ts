@@ -1848,25 +1848,29 @@ Available packages:
   test('tunes a running emulator by name', async () => {
     const commands: Array<[string, ...string[]]> = []
 
-    const tuned = await tuneEmulator('Alpha', {
-      runCommand: async (cmd) => {
-        commands.push(cmd)
+    const tuned = await tuneEmulator(
+      'Alpha',
+      {},
+      {
+        runCommand: async (cmd: [string, ...string[]]) => {
+          commands.push(cmd)
 
-        if (cmd.join(' ') === 'adb devices') {
-          return 'List of devices attached\nemulator-5554 device\n'
-        }
+          if (cmd.join(' ') === 'adb devices') {
+            return 'List of devices attached\nemulator-5554 device\n'
+          }
 
-        if (cmd.join(' ') === 'adb -s emulator-5554 emu avd name') {
-          return 'Alpha\n'
-        }
+          if (cmd.join(' ') === 'adb -s emulator-5554 emu avd name') {
+            return 'Alpha\n'
+          }
 
-        if (cmd.join(' ') === 'adb -s emulator-5554 shell getprop ro.boot.qemu') {
-          return '1\n'
-        }
+          if (cmd.join(' ') === 'adb -s emulator-5554 shell getprop ro.boot.qemu') {
+            return '1\n'
+          }
 
-        return ''
+          return ''
+        },
       },
-    })
+    )
 
     expect(commands).toEqual([
       ['adb', 'devices'],
@@ -1894,17 +1898,63 @@ Available packages:
     const commands: Array<[string, ...string[]]> = []
 
     await expect(
-      applyEmulatorTweaks('emulator-5554', {
-        runCommand: async (cmd) => {
-          commands.push(cmd)
-          return ''
+      applyEmulatorTweaks(
+        'emulator-5554',
+        {},
+        {
+          runCommand: async (cmd: [string, ...string[]]) => {
+            commands.push(cmd)
+            return ''
+          },
         },
-      }),
+      ),
     ).rejects.toThrow('Refusing to tune emulator-5554')
 
     expect(commands).toEqual([
       ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.boot.qemu'],
       ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.kernel.qemu'],
+    ])
+  })
+
+  test('tunes without prompting for tweaks with --yes', async () => {
+    const cancelMessages: string[] = []
+    const commands: Array<[string, ...string[]]> = []
+
+    await runEmulatorTune(
+      { nameOrSerial: 'Alpha', yes: true },
+      {
+        cancel: (message) => {
+          cancelMessages.push(message)
+        },
+        runCommand: async (cmd) => {
+          commands.push(cmd)
+
+          if (cmd.join(' ') === 'adb devices') {
+            return 'List of devices attached\nemulator-5554 device\n'
+          }
+
+          if (cmd.join(' ') === 'adb -s emulator-5554 emu avd name') {
+            return 'Alpha\n'
+          }
+
+          if (cmd.join(' ') === 'adb -s emulator-5554 shell getprop ro.boot.qemu') {
+            return '1\n'
+          }
+
+          return ''
+        },
+        runMultiselect: async () => {
+          throw new Error('The tweak picker must not open with --yes')
+        },
+      },
+    )
+
+    expect(cancelMessages).toEqual([])
+    expect(commands).toEqual([
+      ['adb', 'devices'],
+      ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
+      ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.boot.qemu'],
+      ...expectedTweakCommands('emulator-5554'),
     ])
   })
 
@@ -1935,6 +1985,7 @@ Available packages:
 
           return ''
         },
+        runMultiselect: async ({ initialValues }: { initialValues?: string[] }) => initialValues ?? [],
         runSelect: async (options) => {
           expect(options.message).toEqual('Select a running emulator to tune')
           expect(options.options).toEqual([{ hint: 'serial: emulator-5554', label: 'Alpha', value: 'emulator-5554' }])

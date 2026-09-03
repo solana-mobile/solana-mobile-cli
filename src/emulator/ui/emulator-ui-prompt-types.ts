@@ -1,6 +1,7 @@
 import { cancel, isCancel } from '@clack/prompts'
 
 export type MultiSelectPrompt = (options: {
+  initialValues?: string[]
   message: string
   options: Array<{ hint?: string; label: string; value: string }>
   required?: boolean

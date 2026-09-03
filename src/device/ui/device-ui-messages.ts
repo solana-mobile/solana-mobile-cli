@@ -1,5 +1,7 @@
 export const NO_CONNECTED_DEVICES_MESSAGE = 'No connected Android devices or emulators found'
 
+export const NO_TWEAKS_SELECTED_MESSAGE = 'No tweaks selected'
+
 /**
  * Ports we can put a name to. Purely cosmetic hints on the URL prompt — a reverse on an unknown port is
  * offered all the same, just without a description.

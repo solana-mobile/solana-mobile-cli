@@ -10,8 +10,10 @@ import { buildAdbInstallCommand, extractAdbInstallFailure, installApk } from '..
 import { listConnectedDevices } from '../src/device/data-access/list-connected-devices.ts'
 import { type PathKind, resolveApkArgs } from '../src/device/data-access/resolve-apk-installs.ts'
 import { localhostPort, resolveOpenUrl, validateOpenUrlInput } from '../src/device/data-access/resolve-open-url.ts'
+import { applyDeviceTweaks, DEVICE_TWEAKS } from '../src/device/data-access/tune-device.ts'
 import { runDeviceInstall } from '../src/device/device-feature-install.ts'
 import { runDeviceOpen } from '../src/device/device-feature-open.ts'
+import { runDeviceTune } from '../src/device/device-feature-tune.ts'
 import { describeReverse } from '../src/device/ui/device-ui-messages.ts'
 import { selectOpenUrl } from '../src/device/ui/device-ui-select-open-url.ts'
 import type { MultiSelectPrompt, SelectPrompt, TextPrompt } from '../src/emulator/ui/emulator-ui-prompt-types.ts'
@@ -82,6 +84,50 @@ function openDependencies(runCommand: CommandRunner, prompts: { runSelect?: Sele
 
 function commandsMatching(calls: string[][], part: string): string[][] {
   return calls.filter((cmd) => cmd.includes(part))
+}
+
+/** Accepts the pre-selected tweaks, the way pressing Enter on the picker does. */
+const acceptSelectedTweaks: MultiSelectPrompt = async ({ initialValues }) => initialValues ?? []
+
+function tuneDependencies(
+  runCommand: CommandRunner,
+  prompts: { runMultiselect?: MultiSelectPrompt; runSelect?: SelectPrompt } = {},
+) {
+  const state: { cancelled?: string; logs: string[]; notes: string[]; outro?: string } = { logs: [], notes: [] }
+
+  return {
+    dependencies: {
+      cancel: (message: string) => {
+        state.cancelled = message
+      },
+      intro: () => {},
+      log: (message: string) => {
+        state.logs.push(message)
+      },
+      note: (message: string, title?: string) => {
+        state.notes.push(title ?? message)
+      },
+      outro: (message: string) => {
+        state.outro = message
+      },
+      runCommand,
+      runMultiselect: acceptSelectedTweaks,
+      ...prompts,
+    },
+    state,
+  }
+}
+
+/** Every adb invocation the named tweaks imply for one device, in order. No names means all of them. */
+function tweakCommands(serial: string, ...names: string[]): string[][] {
+  return DEVICE_TWEAKS.filter(({ name }) => names.length === 0 || names.includes(name)).flatMap((tweak) =>
+    tweak.commands.map((command) => ['adb', '-s', serial, 'shell', ...command]),
+  )
+}
+
+/** The tweak calls a tune made, without the name probes `listConnectedDevices` runs first. */
+function tweakCalls(calls: string[][]): string[][] {
+  return calls.filter((cmd) => cmd.includes('shell') && !cmd.includes('getprop'))
 }
 
 describe('resolve-open-url', () => {
@@ -799,6 +845,174 @@ describe('runDeviceInstall', () => {
 
       expect(state.notes).toEqual(['No connected Android devices or emulators found'])
       expect(commandsMatching(calls, 'install')).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+})
+
+describe('applyDeviceTweaks', () => {
+  test('tunes a physical device without asking for emulator properties', async () => {
+    const { calls, runCommand } = recordingRunner(defaultResponses)
+
+    const { applied, skipped } = await applyDeviceTweaks('SM02E4072816572', {}, { runCommand })
+
+    expect(calls).toEqual(tweakCommands('SM02E4072816572'))
+    expect(applied.map((tweak) => tweak.name)).toEqual(DEVICE_TWEAKS.map((tweak) => tweak.name))
+    expect(skipped).toEqual([])
+  })
+
+  test('reports a rejected tweak as skipped and keeps going', async () => {
+    const { calls, runCommand } = recordingRunner((cmd) => {
+      if (cmd.includes('locksettings')) {
+        throw new Error('java.lang.SecurityException: Requires SET_AND_VERIFY_LOCKSCREEN_CREDENTIALS permission')
+      }
+
+      return defaultResponses(cmd)
+    })
+
+    const { applied, skipped } = await applyDeviceTweaks('SM02E4072816572', {}, { runCommand })
+
+    expect(calls).toEqual(tweakCommands('SM02E4072816572'))
+    expect(applied.map((tweak) => tweak.name)).not.toContain('lockscreen-off')
+    expect(skipped.map(({ tweak }) => tweak.name)).toEqual(['lockscreen-off'])
+    expect(skipped.at(0)?.reason).toContain('SET_AND_VERIFY_LOCKSCREEN_CREDENTIALS')
+  })
+})
+
+describe('runDeviceTune', () => {
+  test('tunes the only connected device', async () => {
+    const { calls, runCommand } = recordingRunner((cmd) =>
+      cmd[1] === 'devices' ? 'List of devices attached\nSM02E4072816572\tdevice\n' : defaultResponses(cmd),
+    )
+    const { dependencies, state } = tuneDependencies(runCommand)
+
+    await runDeviceTune({}, dependencies)
+
+    expect(tweakCalls(calls)).toEqual(tweakCommands('SM02E4072816572'))
+    expect(state.logs.at(0)).toBe('Using device: Seeker (SM02E4072816572)')
+    expect(state.logs.at(1)).toContain('Tuned Seeker (SM02E4072816572)')
+    expect(state.logs.at(1)).toContain('- animations-off: Disable window, transition, and animator animations')
+    expect(state.outro).toBe('Tuned 1 device')
+  })
+
+  test('tunes every usable device with --all, leaving the offline one alone', async () => {
+    const { calls, runCommand } = recordingRunner(defaultResponses)
+    const { dependencies, state } = tuneDependencies(runCommand)
+
+    await runDeviceTune({ all: true }, dependencies)
+
+    expect([...new Set(tweakCalls(calls).map((cmd) => cmd[2]))]).toEqual(['emulator-5554', 'SM02E4072816572'])
+    expect(state.outro).toBe('Tuned 2 devices')
+  })
+
+  test('tunes the device picked from the list when several are connected', async () => {
+    const { calls, runCommand } = recordingRunner(defaultResponses)
+    const runSelect: SelectPrompt = async (options) => {
+      expect(options.options.map(({ value }) => value)).toEqual(['emulator-5554', 'SM02E4072816572'])
+      return 'emulator-5554'
+    }
+    const { dependencies, state } = tuneDependencies(runCommand, { runSelect })
+
+    await runDeviceTune({}, dependencies)
+
+    expect([...new Set(tweakCalls(calls).map((cmd) => cmd[2]))]).toEqual(['emulator-5554'])
+    expect(state.outro).toBe('Tuned 1 device')
+  })
+
+  test('applies only the tweaks left selected in the picker', async () => {
+    const { calls, runCommand } = recordingRunner((cmd) =>
+      cmd[1] === 'devices' ? 'List of devices attached\nSM02E4072816572\tdevice\n' : defaultResponses(cmd),
+    )
+    const runMultiselect: MultiSelectPrompt = async ({ initialValues, options }) => {
+      expect(initialValues).toEqual(DEVICE_TWEAKS.map((tweak) => tweak.name))
+      expect(options.map(({ value }) => value)).toEqual(DEVICE_TWEAKS.map((tweak) => tweak.name))
+      return ['animations-off']
+    }
+    const { dependencies, state } = tuneDependencies(runCommand, { runMultiselect })
+
+    await runDeviceTune({}, dependencies)
+
+    expect(tweakCalls(calls)).toEqual(tweakCommands('SM02E4072816572', 'animations-off'))
+    expect(state.logs.at(1)).toBe(
+      'Tuned Seeker (SM02E4072816572)\n- animations-off: Disable window, transition, and animator animations',
+    )
+    expect(state.outro).toBe('Tuned 1 device')
+  })
+
+  test('applies every tweak without prompting with --yes', async () => {
+    const { calls, runCommand } = recordingRunner((cmd) =>
+      cmd[1] === 'devices' ? 'List of devices attached\nSM02E4072816572\tdevice\n' : defaultResponses(cmd),
+    )
+    const { dependencies, state } = tuneDependencies(runCommand, {
+      runMultiselect: async () => {
+        throw new Error('The tweak picker must not open with --yes')
+      },
+    })
+
+    await runDeviceTune({ yes: true }, dependencies)
+
+    expect(tweakCalls(calls)).toEqual(tweakCommands('SM02E4072816572'))
+    expect(state.cancelled).toBeUndefined()
+    expect(state.outro).toBe('Tuned 1 device')
+  })
+
+  test('reports when every tweak is deselected', async () => {
+    const { calls, runCommand } = recordingRunner((cmd) =>
+      cmd[1] === 'devices' ? 'List of devices attached\nSM02E4072816572\tdevice\n' : defaultResponses(cmd),
+    )
+    const { dependencies, state } = tuneDependencies(runCommand, { runMultiselect: async () => [] })
+
+    await runDeviceTune({}, dependencies)
+
+    expect(tweakCalls(calls)).toEqual([])
+    expect(state.logs).toContain('No tweaks selected')
+    expect(state.outro).toBe('Done')
+  })
+
+  test('exits quietly when the tweak picker is cancelled', async () => {
+    const { calls, runCommand } = recordingRunner((cmd) =>
+      cmd[1] === 'devices' ? 'List of devices attached\nSM02E4072816572\tdevice\n' : defaultResponses(cmd),
+    )
+    const { dependencies, state } = tuneDependencies(runCommand, {
+      runMultiselect: async () => Symbol('cancelled'),
+    })
+
+    await runDeviceTune({}, dependencies)
+
+    expect(tweakCalls(calls)).toEqual([])
+    expect(state.outro).toBeUndefined()
+  })
+
+  test('reports an unknown --device serial', async () => {
+    const previousExitCode = process.exitCode
+    const { calls, runCommand } = recordingRunner(defaultResponses)
+    const { dependencies, state } = tuneDependencies(runCommand)
+
+    try {
+      await runDeviceTune({ device: 'NOPE' }, dependencies)
+
+      expect(state.cancelled).toContain('Device not connected or not ready: NOPE')
+      expect(tweakCalls(calls)).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('reports when no device is connected', async () => {
+    const previousExitCode = process.exitCode
+    const { calls, runCommand } = recordingRunner((cmd) =>
+      cmd[1] === 'devices' ? 'List of devices attached\n' : defaultResponses(cmd),
+    )
+    const { dependencies, state } = tuneDependencies(runCommand)
+
+    try {
+      await runDeviceTune({}, dependencies)
+
+      expect(state.notes).toEqual(['No connected Android devices or emulators found'])
+      expect(tweakCalls(calls)).toEqual([])
       expect(process.exitCode).toBe(1)
     } finally {
       process.exitCode = previousExitCode ?? 0

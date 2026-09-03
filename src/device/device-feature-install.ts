@@ -6,7 +6,7 @@ import type { PromptDependencies } from '../emulator/ui/emulator-ui-prompt-types
 import { isUsableDevice } from '../localnet/data-access/list-adb-devices.ts'
 import type { AdbDependencies } from '../localnet/data-access/localnet-types.ts'
 import { APK_CATALOG, findApkCatalogEntry, githubReleaseDownloadUrl } from './data-access/apk-catalog.ts'
-import type { ConnectedDevice, DeviceInstallCommandOptions } from './data-access/device-types.ts'
+import type { DeviceInstallCommandOptions } from './data-access/device-types.ts'
 import { type DownloadApkDependencies, ensureApkDownloaded } from './data-access/download-apk.ts'
 import { installApk } from './data-access/install-apk.ts'
 import { connectedDeviceLabel, listConnectedDevices } from './data-access/list-connected-devices.ts'
@@ -16,7 +16,7 @@ import {
   resolveApkArgs,
 } from './data-access/resolve-apk-installs.ts'
 import { NO_CONNECTED_DEVICES_MESSAGE } from './ui/device-ui-messages.ts'
-import { resolveTargetDevice } from './ui/device-ui-resolve-target-device.ts'
+import { resolveTargetDevices } from './ui/device-ui-resolve-target-device.ts'
 import { selectCatalogApkNames } from './ui/device-ui-select-catalog-apks.ts'
 
 interface RunDeviceInstallDependencies
@@ -159,28 +159,6 @@ export async function runDeviceInstall(
     showCancel(`${error}`)
     process.exitCode = 1
   }
-}
-
-/**
- * `undefined` means a cancelled prompt (exit quietly); an empty array means no devices were
- * connected in the first place (report and fail).
- */
-async function resolveTargetDevices(
-  devices: readonly ConnectedDevice[],
-  options: DeviceInstallCommandOptions,
-  { runSelect }: PromptDependencies,
-): Promise<ConnectedDevice[] | undefined> {
-  if (options.all) {
-    return [...devices]
-  }
-
-  const device = await resolveTargetDevice(devices, options.device, { runSelect })
-
-  if (device === undefined) {
-    return devices.length === 0 ? [] : undefined
-  }
-
-  return [device]
 }
 
 /** `undefined` means the catalog picker was cancelled; an empty array means nothing was selected. */

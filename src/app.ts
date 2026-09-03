@@ -17,9 +17,11 @@ import {
   type DeviceInstallCommandOptions,
   type DeviceListCommandOptions,
   type DeviceOpenCommandOptions,
+  type DeviceTuneCommandOptions,
   runDeviceInstall,
   runDeviceList,
   runDeviceOpen,
+  runDeviceTune,
 } from './device/device-feature-index.ts'
 import type { DoctorCommandOptions } from './doctor/doctor-feature-index.ts'
 import { runDoctor } from './doctor/doctor-feature-index.ts'
@@ -87,6 +89,7 @@ export type AppOptions = {
   runDeviceInstall?: (options: DeviceInstallCommandOptions) => Promise<void>
   runDeviceList?: (options: DeviceListCommandOptions) => Promise<void>
   runDeviceOpen?: (options: DeviceOpenCommandOptions) => Promise<void>
+  runDeviceTune?: (options: DeviceTuneCommandOptions) => Promise<void>
   runEmulatorCreate?: (options: EmulatorCreateCommandOptions) => Promise<void>
   runEmulatorDelete?: (options: EmulatorDeleteCommandOptions) => Promise<void>
   runEmulatorImages?: (options: EmulatorImagesCommandOptions) => Promise<void>
@@ -118,6 +121,7 @@ export function createApp({
   runDeviceInstall: runDeviceInstallCommand = runDeviceInstall,
   runDeviceList: runDeviceListCommand = runDeviceList,
   runDeviceOpen: runDeviceOpenCommand = runDeviceOpen,
+  runDeviceTune: runDeviceTuneCommand = runDeviceTune,
   runEmulatorCreate: runEmulatorCreateCommand = runEmulatorCreate,
   runEmulatorDelete: runEmulatorDeleteCommand = runEmulatorDelete,
   runEmulatorImages: runEmulatorImagesCommand = runEmulatorImages,
@@ -261,6 +265,22 @@ export function createApp({
       await runDeviceOpenCommand({ ...options, url })
     })
 
+  const deviceTuneCommand = deviceCommand
+    .command('tune')
+    .description('Apply agent-friendly tweaks to a connected device or emulator')
+    .option('--all', 'Tune every connected device')
+    .option('--device <serial>', 'Target a device serial')
+    .option('-y, --yes', 'Apply every tweak without prompting')
+    .action(async (options: DeviceTuneCommandOptions) => {
+      if (options.all && options.device) {
+        deviceTuneCommand.error(
+          `error: The --all flag can't be used in combination with --device. Please specify only one.`,
+        )
+      }
+
+      await runDeviceTuneCommand(options)
+    })
+
   app
     .command('doctor')
     .description('Check local development dependencies')
@@ -372,8 +392,9 @@ export function createApp({
   emulatorCommand
     .command('tune [nameOrSerial]')
     .description('Apply agent-friendly tweaks to a running Android emulator')
-    .action(async (nameOrSerial: string | undefined) => {
-      await runEmulatorTuneCommand({ nameOrSerial })
+    .option('-y, --yes', 'Apply every tweak without prompting')
+    .action(async (nameOrSerial: string | undefined, options: Omit<EmulatorTuneCommandOptions, 'nameOrSerial'>) => {
+      await runEmulatorTuneCommand({ ...options, nameOrSerial })
     })
 
   const localnetCommand = withLocalnetTargetOptions(

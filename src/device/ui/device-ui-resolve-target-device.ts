@@ -34,3 +34,26 @@ export async function resolveTargetDevice(
 
   return devices.find((device) => device.serial === serial)
 }
+
+/**
+ * The `--all` aware form, for commands that can act on every connected device at once. `undefined`
+ * means a cancelled prompt (exit quietly); an empty array means no devices were connected in the
+ * first place (report and fail).
+ */
+export async function resolveTargetDevices(
+  devices: readonly ConnectedDevice[],
+  { all, device: requestedSerial }: { all?: boolean; device?: string },
+  { runSelect }: PromptDependencies,
+): Promise<ConnectedDevice[] | undefined> {
+  if (all) {
+    return [...devices]
+  }
+
+  const device = await resolveTargetDevice(devices, requestedSerial, { runSelect })
+
+  if (device === undefined) {
+    return devices.length === 0 ? [] : undefined
+  }
+
+  return [device]
+}
