@@ -752,6 +752,12 @@ Available packages:
             ])
             return selectedSystemImage
           },
+          taskLog: () => ({
+            error: () => {},
+            group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+            message: () => {},
+            success: () => {},
+          }),
         },
       )
 
