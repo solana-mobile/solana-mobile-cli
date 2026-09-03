@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from 'bun:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
 import { createAvdConfigValues, parseAvdConfig } from '../src/emulator/data-access/avd-config.ts'
 import { createAvd } from '../src/emulator/data-access/create-avd.ts'
 import { deleteInstalledAvds } from '../src/emulator/data-access/delete-installed-avds.ts'
@@ -1345,6 +1346,41 @@ Available packages:
     }
   })
 
+  test('rejects --tune without --start when creating an emulator', async () => {
+    const cancels: string[] = []
+    const previousExitCode = process.exitCode
+
+    try {
+      await runEmulatorCreate(
+        { name: 'named_phone', tune: true },
+        {
+          cancel: (message) => {
+            cancels.push(message)
+          },
+          runCommand: async (cmd) => {
+            throw new Error(`Unexpected command: ${cmd.join(' ')}`)
+          },
+          runText: async () => {
+            throw new Error('Unexpected emulator name prompt.')
+          },
+          tasks: async () => {
+            throw new Error('Unexpected create task.')
+          },
+        },
+      )
+
+      expect(cancels).toEqual([
+        [
+          'Error: Cannot tune an emulator that is not started: --tune requires --start',
+          `Tune it later with: ${formatCliCommand('emulator tune')}`,
+        ].join('\n'),
+      ])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode
+    }
+  })
+
   test('deletes installed emulators through avdmanager', async () => {
     const commands: Array<[string, ...string[]]> = []
 
@@ -1632,7 +1668,7 @@ Available packages:
       await writeFile(join(homeDirectory, '.android', 'avd', 'Beta.avd', 'config.ini'), 'target=android-35\n')
 
       await runEmulatorStart(
-        { sdkRoot: '/sdk', tune: false },
+        { sdkRoot: '/sdk' },
         {
           getHomeDirectory: () => homeDirectory,
           runCommand: async (cmd) => {
@@ -1722,7 +1758,7 @@ Available packages:
       await writeFile(join(homeDirectory, '.android', 'avd', 'Alpha.avd', 'config.ini'), 'target=android-36\n')
 
       await runEmulatorStart(
-        { name: 'Alpha', sdkRoot: '/sdk' },
+        { name: 'Alpha', sdkRoot: '/sdk', tune: true },
         {
           getHomeDirectory: () => homeDirectory,
           runCommand: async (cmd) => {
@@ -1764,6 +1800,46 @@ Available packages:
         ['adb', '-s', 'emulator-5554', 'shell', 'getprop', 'ro.boot.qemu'],
         ...expectedTweakCommands('emulator-5554'),
       ])
+    } finally {
+      await rm(homeDirectory, { force: true, recursive: true })
+    }
+  })
+
+  test('skips tuning after starting an emulator unless requested', async () => {
+    const homeDirectory = await createTemporaryDirectory('solana-mobile-avd-start-no-tune-')
+    const commands: Array<[string, ...string[]]> = []
+    const notes: Array<[string, string | undefined]> = []
+    const startedCommands: Array<[string, ...string[]]> = []
+
+    try {
+      await mkdir(join(homeDirectory, '.android', 'avd', 'Alpha.avd'), { recursive: true })
+      await writeFile(join(homeDirectory, '.android', 'avd', 'Alpha.ini'), 'path=Alpha.avd\n')
+      await writeFile(join(homeDirectory, '.android', 'avd', 'Alpha.avd', 'config.ini'), 'target=android-36\n')
+
+      await runEmulatorStart(
+        { name: 'Alpha', sdkRoot: '/sdk' },
+        {
+          getHomeDirectory: () => homeDirectory,
+          note: (message, title) => {
+            notes.push([message, title])
+          },
+          runCommand: async (cmd) => {
+            commands.push(cmd)
+            return ''
+          },
+          runSelect: async () => {
+            throw new Error('Unexpected start selection prompt.')
+          },
+          sleep: async () => {},
+          startProcess: async (cmd) => {
+            startedCommands.push(cmd)
+          },
+        },
+      )
+
+      expect(startedCommands).toEqual([['/sdk/emulator/emulator', '@Alpha']])
+      expect(commands).toEqual([])
+      expect(notes).toEqual([[formatCliCommand('emulator tune Alpha'), 'Apply agent-friendly tweaks']])
     } finally {
       await rm(homeDirectory, { force: true, recursive: true })
     }

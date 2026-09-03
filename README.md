@@ -67,8 +67,8 @@ npx solana-mobile emulator start
 # Start an emulator by name
 npx solana-mobile emulator start local_phone
 
-# Start an emulator without applying tweaks after boot
-npx solana-mobile emulator start local_phone --no-tune
+# Start an emulator and apply agent-friendly tweaks after boot
+npx solana-mobile emulator start local_phone --tune
 
 # Show status for all installed and running emulators
 npx solana-mobile emulator status

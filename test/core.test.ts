@@ -761,6 +761,7 @@ describe('app', () => {
       '--start',
       '--system-image',
       'system-images;android-36;google_apis_playstore;arm64-v8a',
+      '--tune',
       '--verbose',
       '--vm-heap-mb',
       '384',
@@ -818,7 +819,7 @@ describe('app', () => {
       },
     })
 
-    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'start', 'Alpha', '--sdk-root', '/sdk'])
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'start', 'Alpha', '--sdk-root', '/sdk', '--tune'])
 
     expect(emulatorStartOptions).toEqual([{ name: 'Alpha', sdkRoot: '/sdk', tune: true }])
   })
@@ -833,7 +834,7 @@ describe('app', () => {
 
     await app.parseAsync(['node', 'solana-mobile', 'emulator', 'start'])
 
-    expect(emulatorStartOptions).toEqual([{ name: undefined, tune: true }])
+    expect(emulatorStartOptions).toEqual([{ name: undefined }])
   })
 
   test('delegates emulator stop command options', async () => {
