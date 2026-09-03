@@ -24,8 +24,8 @@ export const APK_CATALOG: readonly ApkCatalogEntry[] = [
     source: {
       asset: 'fakewallet-v1-release.apk',
       repo: 'solana-mobile/mobile-wallet-adapter',
-      sha256: '8b19cd916d30da8c4b2410a074fa59feb680cfd5292a32a4830ffd4ceb5a8ac8',
-      tag: '@solana-mobile/wallet-adapter-mobile@2.2.9',
+      sha256: '550055426683c88aac246bef442bc8a37fe4986dca0b1ef475337dd7be6746e9',
+      tag: '@solana-mobile/wallet-adapter-mobile@2.3.0',
       type: 'github-release',
     },
   },
