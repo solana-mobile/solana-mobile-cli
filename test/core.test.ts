@@ -11,6 +11,7 @@ import { readPackageString } from '../src/core/util/read-package-string.ts'
 import type { CreateCommandOptions, CreateSolanaDappApi } from '../src/create/create-feature-index.ts'
 import { getInitialProjectName, MINIMAL_TEMPLATE_NAME, runCreate } from '../src/create/create-feature-index.ts'
 import { projectNameSchema, validateProjectName } from '../src/create/data-access/validate-project-name.ts'
+import type { DeviceTuneCommandOptions } from '../src/device/device-feature-index.ts'
 import type {
   EmulatorCreateCommandOptions,
   EmulatorDeleteCommandOptions,
@@ -20,6 +21,7 @@ import type {
   EmulatorStartCommandOptions,
   EmulatorStatusCommandOptions,
   EmulatorStopCommandOptions,
+  EmulatorTuneCommandOptions,
 } from '../src/emulator/emulator-feature-index.ts'
 import type {
   LocalnetForwardCommandOptions,
@@ -372,6 +374,48 @@ describe('app', () => {
     await app.parseAsync(['node', 'solana-mobile', 'emulator', 'images', 'list', '--skip-version-check'])
 
     expect(checkCalled).toBe(false)
+  })
+
+  test('registers device subcommands', () => {
+    const deviceCommand = createApp().commands.find((command) => command.name() === 'device')
+
+    expect(deviceCommand?.commands.map((command) => command.name())).toEqual(['install', 'list', 'open', 'tune'])
+  })
+
+  test('delegates device tune command options', async () => {
+    const deviceTuneOptions: DeviceTuneCommandOptions[] = []
+    const app = createApp({
+      runDeviceTune: async (options) => {
+        deviceTuneOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'device', 'tune', '--device', 'SM02E4072816572'])
+    await app.parseAsync(['node', 'solana-mobile', 'device', 'tune', '--all', '-y'])
+
+    expect(deviceTuneOptions).toEqual([{ device: 'SM02E4072816572' }, { all: true, yes: true }])
+  })
+
+  test('rejects device tune with both --all and --device', async () => {
+    const app = createAppWithSilencedDeviceTuneCommand()
+
+    await expect(
+      app.parseAsync(['node', 'solana-mobile', 'device', 'tune', '--all', '--device', 'SM02E4072816572']),
+    ).rejects.toThrow(`The --all flag can't be used in combination with --device`)
+  })
+
+  test('delegates emulator tune command options', async () => {
+    const emulatorTuneOptions: EmulatorTuneCommandOptions[] = []
+    const app = createApp({
+      runEmulatorTune: async (options) => {
+        emulatorTuneOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'tune'])
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'tune', 'Alpha', '--yes'])
+
+    expect(emulatorTuneOptions).toEqual([{ nameOrSerial: undefined }, { nameOrSerial: 'Alpha', yes: true }])
   })
 
   test('registers emulator alias and subcommands', () => {
@@ -1405,6 +1449,21 @@ describe('validate project name', () => {
     expect(projectNameSchema.safeParse('src').success).toBe(true)
   })
 })
+
+function createAppWithSilencedDeviceTuneCommand() {
+  const app = createApp({ runDeviceTune: async () => {} })
+  const deviceCommand = app.commands.find((command) => command.name() === 'device')
+
+  app.exitOverride()
+  app.configureOutput({ writeErr: () => {}, writeOut: () => {} })
+  deviceCommand?.exitOverride().configureOutput({ writeErr: () => {}, writeOut: () => {} })
+  deviceCommand?.commands
+    .find((command) => command.name() === 'tune')
+    ?.exitOverride()
+    .configureOutput({ writeErr: () => {}, writeOut: () => {} })
+
+  return app
+}
 
 function createAppWithSilencedCreateCommand() {
   const app = createApp({ runCreate: async () => {} })

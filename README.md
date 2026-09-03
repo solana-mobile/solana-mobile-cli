@@ -6,7 +6,7 @@ CLI for Solana Mobile development.
 
 - **Command help** — show available subcommands when no command is provided
 - **Create projects** — scaffold Solana Mobile apps from the template catalog
-- **Device helpers** — list connected devices, install APKs, and open URLs, dev servers, and deep links on them
+- **Device helpers** — list connected devices, install APKs, tune them for automation, and open URLs, dev servers, and deep links on them
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, stop, and tune local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
@@ -67,7 +67,7 @@ npx solana-mobile emulator start
 # Start an emulator by name
 npx solana-mobile emulator start local_phone
 
-# Start an emulator and apply agent-friendly tweaks after boot
+# Start an emulator and apply every agent-friendly tweak after boot, without prompting
 npx solana-mobile emulator start local_phone --tune
 
 # Show status for all installed and running emulators
@@ -82,11 +82,14 @@ npx solana-mobile emulator stop
 # Stop a running emulator by name or serial
 npx solana-mobile emulator stop local_phone
 
-# Tune by choosing from running emulators
+# Tune by choosing from running emulators, then pick the tweaks to apply
 npx solana-mobile emulator tune
 
 # Tune a running emulator by name or serial
 npx solana-mobile emulator tune local_phone
+
+# Apply every tweak without prompting
+npx solana-mobile emulator tune local_phone --yes
 
 # Use the short alias
 npx solana-mobile emu list
@@ -125,6 +128,29 @@ npx solana-mobile device open 3000 --no-forward
 
 # Explain URL and port forwarding decisions
 npx solana-mobile device open 3000 --verbose
+```
+
+### Tune a device for automation
+
+Applies the agent-friendly tweaks — animations, notifications, autofill, and Chrome first-run prompts off,
+screen kept awake, lock screen disabled — to a connected device or emulator. `device tune` is the same
+command as [`emulator tune`](#manage-android-emulators) with device-style targeting, so it accepts physical
+devices too. Both pick the tweaks from a list with everything pre-selected, so Enter applies the lot;
+deselect the ones you do not want, or pass `-y` to skip the picker entirely. Tweaks a device rejects (a
+phone with a screen lock keeps its lock screen) are reported as skipped instead of failing the run.
+
+```bash
+# Tune the connected device; several connected pick from a list
+npx solana-mobile device tune
+
+# Tune a specific device
+npx solana-mobile device tune --device SM02E4072816572
+
+# Tune every connected device and emulator
+npx solana-mobile device tune --all
+
+# Apply every tweak without prompting, for unattended runs
+npx solana-mobile device tune --device SM02E4072816572 --yes
 ```
 
 ### Install APKs

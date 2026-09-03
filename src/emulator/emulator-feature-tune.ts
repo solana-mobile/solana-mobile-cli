@@ -1,8 +1,10 @@
 import { cancel, log as clackLog, intro, note, outro } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
+import { formatAppliedTweaks } from '../device/ui/device-ui-format-applied-tweaks.ts'
+import { NO_TWEAKS_SELECTED_MESSAGE } from '../device/ui/device-ui-messages.ts'
+import { resolveDeviceTweaks } from '../device/ui/device-ui-select-device-tweaks.ts'
 import type {
-  AppliedEmulatorTweaks,
   EmulatorTuneCommandOptions,
   RunningEmulator,
   TuneEmulatorDependencies,
@@ -22,12 +24,8 @@ interface RunEmulatorTuneDependencies extends PromptDependencies, TuneEmulatorDe
   outro?: (message: string) => void
 }
 
-function formatAppliedTweaks(emulator: RunningEmulator, { applied, skipped }: AppliedEmulatorTweaks): string {
-  return [
-    `Tuned emulator: ${emulator.name} (${emulator.serial})`,
-    ...applied.map((tweak) => `- ${tweak.name}: ${tweak.description}`),
-    ...skipped.map(({ reason, tweak }) => `- ${tweak.name}: skipped (${reason})`),
-  ].join('\n')
+function emulatorLabel({ name, serial }: RunningEmulator): string {
+  return `emulator: ${name} (${serial})`
 }
 
 export async function runEmulatorTune(
@@ -40,6 +38,7 @@ export async function runEmulatorTune(
     note: showNote = note,
     outro: showOutro = outro,
     runCommand = runExecutable,
+    runMultiselect,
     runSelect,
   }: RunEmulatorTuneDependencies = {},
 ) {
@@ -64,9 +63,21 @@ export async function runEmulatorTune(
       }
     }
 
-    const { applied, emulator, skipped } = await tuneEmulator(nameOrSerial, { runCommand })
+    const tweaks = await resolveDeviceTweaks(options, runMultiselect)
 
-    log(formatAppliedTweaks(emulator, { applied, skipped }))
+    if (tweaks === undefined) {
+      return
+    }
+
+    if (tweaks.length === 0) {
+      log(NO_TWEAKS_SELECTED_MESSAGE)
+      showOutro('Done')
+      return
+    }
+
+    const { applied, emulator, skipped } = await tuneEmulator(nameOrSerial, { tweaks }, { runCommand })
+
+    log(formatAppliedTweaks(emulatorLabel(emulator), { applied, skipped }))
     showOutro('Done')
   } catch (error) {
     showCancel(`${error}`)
@@ -96,9 +107,9 @@ export async function waitAndTuneEmulator(
     log(`Waiting for emulator to boot: ${name}`)
 
     const emulator = await waitForEmulatorBoot(name, { pollIntervalMs, runCommand, sleep, timeoutMs })
-    const result = await applyEmulatorTweaks(emulator.serial, { runCommand })
+    const result = await applyEmulatorTweaks(emulator.serial, {}, { runCommand })
 
-    log(formatAppliedTweaks(emulator, result))
+    log(formatAppliedTweaks(emulatorLabel(emulator), result))
   } catch (error) {
     showNote(
       `${error}\nApply the tweaks manually with: ${formatCommand(`emulator tune ${name}`)}`,
