@@ -1,33 +1,38 @@
 export type {
-  TemplateGroupConfig,
-  TemplateMetadata,
-  TemplatePackageJson,
-  TemplateRepository,
-  TemplateRepositoryArtifact,
-  TemplateRepositoryCheckResult,
-  TemplateRepositoryGroup,
-  TemplateRepositoryPackageJson,
-  TemplateRepositoryWriteResult,
   TemplateSyncAction,
   TemplateSyncActionKind,
   TemplateSyncDependencies,
   TemplateSyncPlan,
-  TemplatesCheckCommandOptions,
-  TemplatesGenerateCommandOptions,
-  TemplatesSyncCommandOptions,
   TrackedFile,
-} from './templates/templates-feature-index.ts'
+} from './templates/data-access/sync-template-repository.ts'
 export {
   applyTemplateSync,
-  checkTemplateRepository,
   listWorkTreeChanges,
   planTemplateSync,
+} from './templates/data-access/sync-template-repository.ts'
+export type {
+  TemplateMetadata,
+  TemplateRepository,
+  TemplateRepositoryArtifact,
+  TemplateRepositoryCheckResult,
+  TemplateRepositoryGroup,
+  TemplateRepositoryWriteResult,
+} from './templates/data-access/template-repository.ts'
+export {
+  checkTemplateRepository,
   renderTemplateRepository,
-  runTemplatesCheck,
-  runTemplatesGenerate,
-  runTemplatesSync,
+  writeTemplateRepository,
+} from './templates/data-access/template-repository.ts'
+export type {
+  TemplateGroupConfig,
+  TemplatePackageJson,
+  TemplateRepositoryPackageJson,
+} from './templates/data-access/template-repository-schema.ts'
+export {
   TemplateGroupConfigSchema,
   TemplatePackageJsonSchema,
   TemplateRepositoryPackageJsonSchema,
-  writeTemplateRepository,
-} from './templates/templates-feature-index.ts'
+} from './templates/data-access/template-repository-schema.ts'
+export { runTemplatesCheck, type TemplatesCheckCommandOptions } from './templates/templates-feature-check.ts'
+export { runTemplatesGenerate, type TemplatesGenerateCommandOptions } from './templates/templates-feature-generate.ts'
+export { runTemplatesSync, type TemplatesSyncCommandOptions } from './templates/templates-feature-sync.ts'

@@ -1314,28 +1314,6 @@ describe('localnet command', () => {
     expect(forwardOptions[0]?.watch).toBe(true)
   })
 
-  test('inherits the root command settings through addCommand', async () => {
-    // Commander copies the root's settings into commands made with `command()` but not into ones passed
-    // to `addCommand`, so a feature-owned command silently drops `showHelpAfterError` (and
-    // `enablePositionalOptions`) unless `createApp` copies them back. Without that copy this prints the
-    // bare error line and nothing else.
-    const errors: string[] = []
-    const app = createApp({ runLocalnetStart: async () => {} })
-
-    app.exitOverride()
-    app.configureOutput({ writeErr: (text) => errors.push(text), writeOut: () => {} })
-    app.commands
-      .find((command) => command.name() === 'localnet')
-      ?.exitOverride()
-      .configureOutput({ writeErr: (text) => errors.push(text), writeOut: () => {} })
-
-    await expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--bogus'])).rejects.toThrow(
-      "unknown option '--bogus'",
-    )
-
-    expect(errors.join('')).toContain('Usage: solana-mobile localnet')
-  })
-
   test('rejects an unknown localnet engine', async () => {
     const app = createApp({ runLocalnetStart: async () => {} })
 

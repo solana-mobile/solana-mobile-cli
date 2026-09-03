@@ -16,6 +16,9 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
+import { createApp } from '../src/app.ts'
+import type { TemplatesCheckCommandOptions } from '../src/templates/templates-feature-check.ts'
+import type { TemplatesGenerateCommandOptions } from '../src/templates/templates-feature-generate.ts'
 import {
   applyTemplateSync,
   checkTemplateRepository,
@@ -1012,3 +1015,53 @@ function writeManifest(root: string, update: (manifest: Record<string, unknown>)
   update(manifest)
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 }
+
+describe('templates command', () => {
+  test('registers templates subcommands', () => {
+    const templatesCommand = createApp().commands.find((command) => command.name() === 'templates')
+
+    expect(templatesCommand?.commands.map((command) => command.name())).toEqual(['check', 'generate', 'sync'])
+  })
+  test('does not delegate templates command to check', async () => {
+    const templatesCheckOptions: TemplatesCheckCommandOptions[] = []
+    const app = createApp({
+      runTemplatesCheck: async (options) => {
+        templatesCheckOptions.push(options)
+      },
+    })
+    const templatesCommand = app.commands.find((command) => command.name() === 'templates')
+
+    templatesCommand?.configureOutput({
+      writeErr: () => {},
+      writeOut: () => {},
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'templates'])
+
+    expect(templatesCheckOptions).toEqual([])
+  })
+  test('delegates templates check command options', async () => {
+    const templatesCheckOptions: TemplatesCheckCommandOptions[] = []
+    const app = createApp({
+      runTemplatesCheck: async (options) => {
+        templatesCheckOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'templates', 'check', '--root', '/repo'])
+
+    expect(templatesCheckOptions).toEqual([{ root: '/repo' }])
+  })
+  test('delegates templates generate command options', async () => {
+    const templatesGenerateOptions: TemplatesGenerateCommandOptions[] = []
+    const app = createApp({
+      runTemplatesGenerate: async (options) => {
+        templatesGenerateOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'templates', 'generate', '--root', '/repo'])
+
+    expect(templatesGenerateOptions).toEqual([{ root: '/repo' }])
+  })
+})

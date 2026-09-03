@@ -12,7 +12,7 @@ import { checkNodeVersion, normalizeNodeVersion } from '../src/doctor/data-acces
 import { checkOperatingSystem, checkPackageManagers } from '../src/doctor/data-access/check-system-and-javascript.ts'
 import type { DoctorCheckResult } from '../src/doctor/data-access/doctor-check-result.ts'
 import { type DoctorEnvironment, expandHome } from '../src/doctor/data-access/doctor-environment.ts'
-import { buildDoctorReport, deriveCapabilities, getDoctorExitCode } from '../src/doctor/doctor-feature-index.ts'
+import { buildDoctorReport, deriveCapabilities, getDoctorExitCode } from '../src/doctor/data-access/doctor-report.ts'
 import { formatDoctorReport } from '../src/doctor/ui/doctor-ui-report.ts'
 
 function environment(overrides: Partial<DoctorEnvironment> = {}): DoctorEnvironment {
