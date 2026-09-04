@@ -3,10 +3,22 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { tasks } from '@clack/prompts'
+import { createApp } from '../src/app.ts'
 import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
 import { createAvdConfigValues, parseAvdConfig } from '../src/emulator/data-access/avd-config.ts'
 import { createAvd } from '../src/emulator/data-access/create-avd.ts'
 import { deleteInstalledAvds } from '../src/emulator/data-access/delete-installed-avds.ts'
+import type {
+  EmulatorCreateCommandOptions,
+  EmulatorDeleteCommandOptions,
+  EmulatorImagesCommandOptions,
+  EmulatorImagesDeleteCommandOptions,
+  EmulatorImagesInstallCommandOptions,
+  EmulatorStartCommandOptions,
+  EmulatorStatusCommandOptions,
+  EmulatorStopCommandOptions,
+  EmulatorTuneCommandOptions,
+} from '../src/emulator/data-access/emulator-types.ts'
 import { listEmulatorStatuses } from '../src/emulator/data-access/list-emulator-statuses.ts'
 import { listInstalledAvds } from '../src/emulator/data-access/list-installed-avds.ts'
 import {
@@ -2358,5 +2370,325 @@ Available packages:
     )
 
     expect(commands).toEqual([['adb', 'devices']])
+  })
+})
+
+describe('emulator command', () => {
+  test('delegates emulator tune command options', async () => {
+    const emulatorTuneOptions: EmulatorTuneCommandOptions[] = []
+    const app = createApp({
+      runEmulatorTune: async (options) => {
+        emulatorTuneOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'tune'])
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'tune', 'Alpha', '--yes'])
+
+    expect(emulatorTuneOptions).toEqual([{ nameOrSerial: undefined }, { nameOrSerial: 'Alpha', yes: true }])
+  })
+  test('registers emulator alias and subcommands', () => {
+    const emulatorCommand = createApp().commands.find((command) => command.name() === 'emulator')
+
+    expect(emulatorCommand?.aliases()).toEqual(['emu'])
+    expect(emulatorCommand?.commands.map((command) => command.name())).toEqual([
+      'create',
+      'delete',
+      'images',
+      'list',
+      'start',
+      'status',
+      'stop',
+      'tune',
+    ])
+  })
+  test('does not delegate emulator command to list', async () => {
+    const emulatorListOptions: Array<Record<string, never>> = []
+    const app = createApp({
+      runEmulatorList: async (options) => {
+        emulatorListOptions.push(options)
+      },
+    })
+
+    app.configureOutput({
+      writeErr: () => {},
+      writeOut: () => {},
+    })
+    app.commands
+      .find((command) => command.name() === 'emulator')
+      ?.configureOutput({
+        writeErr: () => {},
+        writeOut: () => {},
+      })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator'])
+
+    expect(emulatorListOptions).toEqual([])
+  })
+  test('delegates emulator list command options', async () => {
+    const emulatorListOptions: Array<Record<string, never>> = []
+    const app = createApp({
+      runEmulatorList: async (options) => {
+        emulatorListOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'list'])
+
+    expect(emulatorListOptions).toEqual([{}])
+  })
+  test('delegates emulator alias list command options', async () => {
+    const emulatorListOptions: Array<Record<string, never>> = []
+    const app = createApp({
+      runEmulatorList: async (options) => {
+        emulatorListOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emu', 'list'])
+
+    expect(emulatorListOptions).toEqual([{}])
+  })
+  test('does not delegate emulator images command to list', async () => {
+    const emulatorImagesOptions: EmulatorImagesCommandOptions[] = []
+    const app = createApp({
+      runEmulatorImages: async (options) => {
+        emulatorImagesOptions.push(options)
+      },
+    })
+
+    const emulatorImagesCommand = app.commands
+      .find((command) => command.name() === 'emulator')
+      ?.commands.find((command) => command.name() === 'images')
+
+    emulatorImagesCommand?.configureOutput({
+      writeErr: () => {},
+      writeOut: () => {},
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'images'])
+
+    expect(emulatorImagesCommand?.commands.map((command) => command.name())).toEqual(['delete', 'install', 'list'])
+    expect(emulatorImagesOptions).toEqual([])
+  })
+  test('delegates emulator images delete command options', async () => {
+    const emulatorImagesDeleteOptions: EmulatorImagesDeleteCommandOptions[] = []
+    const app = createApp({
+      runEmulatorImagesDelete: async (options) => {
+        emulatorImagesDeleteOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'emulator',
+      'images',
+      'delete',
+      'system-images/android-35/google_apis_playstore/arm64-v8a',
+      'system-images/android-36/google_apis_playstore/arm64-v8a',
+      '--sdk-root',
+      '/sdk',
+    ])
+
+    expect(emulatorImagesDeleteOptions).toEqual([
+      {
+        sdkRoot: '/sdk',
+        systemImages: [
+          'system-images/android-35/google_apis_playstore/arm64-v8a',
+          'system-images/android-36/google_apis_playstore/arm64-v8a',
+        ],
+      },
+    ])
+  })
+  test('delegates emulator images install command options', async () => {
+    const emulatorImagesInstallOptions: EmulatorImagesInstallCommandOptions[] = []
+    const app = createApp({
+      runEmulatorImagesInstall: async (options) => {
+        emulatorImagesInstallOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'emulator',
+      'images',
+      'install',
+      'system-images/android-36.1/google_apis_playstore/arm64-v8a',
+      '--all',
+      '--sdk-root',
+      '/sdk',
+      '--verbose',
+    ])
+
+    expect(emulatorImagesInstallOptions).toEqual([
+      {
+        all: true,
+        sdkRoot: '/sdk',
+        systemImage: 'system-images/android-36.1/google_apis_playstore/arm64-v8a',
+        verbose: true,
+      },
+    ])
+  })
+  test('delegates emulator images list command options', async () => {
+    const emulatorImagesOptions: EmulatorImagesCommandOptions[] = []
+    const app = createApp({
+      runEmulatorImages: async (options) => {
+        emulatorImagesOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'images', 'list', '--sdk-root', '/sdk'])
+
+    expect(emulatorImagesOptions).toEqual([{ sdkRoot: '/sdk' }])
+  })
+  test('delegates emulator create command options', async () => {
+    const emulatorCreateOptions: EmulatorCreateCommandOptions[] = []
+    const app = createApp({
+      runEmulatorCreate: async (options) => {
+        emulatorCreateOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'emulator',
+      'create',
+      'test_phone',
+      '--data-size',
+      '16G',
+      '--device',
+      'pixel_9',
+      '--profile',
+      'solana-mobile',
+      '--ram-mb',
+      '4096',
+      '--sdcard-size',
+      '256M',
+      '--sdk-root',
+      '/sdk',
+      '--start',
+      '--system-image',
+      'system-images;android-36;google_apis_playstore;arm64-v8a',
+      '--tune',
+      '--verbose',
+      '--vm-heap-mb',
+      '384',
+    ])
+
+    expect(emulatorCreateOptions).toEqual([
+      {
+        dataSize: '16G',
+        device: 'pixel_9',
+        name: 'test_phone',
+        profile: 'solana-mobile',
+        ramMb: 4096,
+        sdcardSize: '256M',
+        sdkRoot: '/sdk',
+        start: true,
+        systemImage: 'system-images;android-36;google_apis_playstore;arm64-v8a',
+        tune: true,
+        verbose: true,
+        vmHeapMb: 384,
+      },
+    ])
+  })
+  test('delegates emulator delete command options', async () => {
+    const emulatorDeleteOptions: EmulatorDeleteCommandOptions[] = []
+    const app = createApp({
+      runEmulatorDelete: async (options) => {
+        emulatorDeleteOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'delete', 'Alpha', 'Beta', '--sdk-root', '/sdk'])
+
+    expect(emulatorDeleteOptions).toEqual([{ names: ['Alpha', 'Beta'], sdkRoot: '/sdk' }])
+  })
+  test('delegates emulator delete without names', async () => {
+    const emulatorDeleteOptions: EmulatorDeleteCommandOptions[] = []
+    const app = createApp({
+      runEmulatorDelete: async (options) => {
+        emulatorDeleteOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'delete'])
+
+    expect(emulatorDeleteOptions).toEqual([{ names: [] }])
+  })
+  test('delegates emulator start command options', async () => {
+    const emulatorStartOptions: EmulatorStartCommandOptions[] = []
+    const app = createApp({
+      runEmulatorStart: async (options) => {
+        emulatorStartOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'start', 'Alpha', '--sdk-root', '/sdk', '--tune'])
+
+    expect(emulatorStartOptions).toEqual([{ name: 'Alpha', sdkRoot: '/sdk', tune: true }])
+  })
+  test('delegates emulator start without name', async () => {
+    const emulatorStartOptions: EmulatorStartCommandOptions[] = []
+    const app = createApp({
+      runEmulatorStart: async (options) => {
+        emulatorStartOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'start'])
+
+    expect(emulatorStartOptions).toEqual([{ name: undefined }])
+  })
+  test('delegates emulator stop command options', async () => {
+    const emulatorStopOptions: EmulatorStopCommandOptions[] = []
+    const app = createApp({
+      runEmulatorStop: async (options) => {
+        emulatorStopOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'stop', 'Alpha'])
+
+    expect(emulatorStopOptions).toEqual([{ nameOrSerial: 'Alpha' }])
+  })
+  test('delegates emulator status command options', async () => {
+    const emulatorStatusOptions: EmulatorStatusCommandOptions[] = []
+    const app = createApp({
+      runEmulatorStatus: async (options) => {
+        emulatorStatusOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'status', 'Alpha'])
+
+    expect(emulatorStatusOptions).toEqual([{ nameOrSerial: 'Alpha' }])
+  })
+  test('delegates emulator status without name or serial', async () => {
+    const emulatorStatusOptions: EmulatorStatusCommandOptions[] = []
+    const app = createApp({
+      runEmulatorStatus: async (options) => {
+        emulatorStatusOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'status'])
+
+    expect(emulatorStatusOptions).toEqual([{ nameOrSerial: undefined }])
+  })
+  test('delegates emulator stop without name or serial', async () => {
+    const emulatorStopOptions: EmulatorStopCommandOptions[] = []
+    const app = createApp({
+      runEmulatorStop: async (options) => {
+        emulatorStopOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'emulator', 'stop'])
+
+    expect(emulatorStopOptions).toEqual([{ nameOrSerial: undefined }])
   })
 })

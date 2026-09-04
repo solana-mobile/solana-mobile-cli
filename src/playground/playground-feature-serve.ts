@@ -21,9 +21,6 @@ import { startPlaygroundServer } from './data-access/playground-server.ts'
 import type { PlaygroundCommandOptions } from './data-access/playground-types.ts'
 import { renderPlaygroundEvent } from './ui/playground-ui-messages.ts'
 
-export { parsePlaygroundClusterId } from './data-access/playground-clusters.ts'
-export type { PlaygroundClusterId, PlaygroundCommandOptions } from './data-access/playground-types.ts'
-
 interface RunPlaygroundDependencies extends AdbDependencies, PromptDependencies {
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand

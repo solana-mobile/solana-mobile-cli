@@ -3,8 +3,10 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createApp } from '../src/app.ts'
 import type { CommandRunner } from '../src/core/data-access/command-types.ts'
 import { findApkCatalogEntry, githubReleaseDownloadUrl } from '../src/device/data-access/apk-catalog.ts'
+import type { DeviceTuneCommandOptions } from '../src/device/data-access/device-types.ts'
 import { defaultDownloadFile, ensureApkDownloaded } from '../src/device/data-access/download-apk.ts'
 import { buildAdbInstallCommand, extractAdbInstallFailure, installApk } from '../src/device/data-access/install-apk.ts'
 import { listConnectedDevices } from '../src/device/data-access/list-connected-devices.ts'
@@ -1017,5 +1019,48 @@ describe('runDeviceTune', () => {
     } finally {
       process.exitCode = previousExitCode ?? 0
     }
+  })
+})
+
+function createAppWithSilencedDeviceTuneCommand() {
+  const app = createApp({ runDeviceTune: async () => {} })
+  const deviceCommand = app.commands.find((command) => command.name() === 'device')
+
+  app.exitOverride()
+  app.configureOutput({ writeErr: () => {}, writeOut: () => {} })
+  deviceCommand?.exitOverride().configureOutput({ writeErr: () => {}, writeOut: () => {} })
+  deviceCommand?.commands
+    .find((command) => command.name() === 'tune')
+    ?.exitOverride()
+    .configureOutput({ writeErr: () => {}, writeOut: () => {} })
+
+  return app
+}
+
+describe('device command', () => {
+  test('registers device subcommands', () => {
+    const deviceCommand = createApp().commands.find((command) => command.name() === 'device')
+
+    expect(deviceCommand?.commands.map((command) => command.name())).toEqual(['install', 'list', 'open', 'tune'])
+  })
+  test('delegates device tune command options', async () => {
+    const deviceTuneOptions: DeviceTuneCommandOptions[] = []
+    const app = createApp({
+      runDeviceTune: async (options) => {
+        deviceTuneOptions.push(options)
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'device', 'tune', '--device', 'SM02E4072816572'])
+    await app.parseAsync(['node', 'solana-mobile', 'device', 'tune', '--all', '-y'])
+
+    expect(deviceTuneOptions).toEqual([{ device: 'SM02E4072816572' }, { all: true, yes: true }])
+  })
+  test('rejects device tune with both --all and --device', async () => {
+    const app = createAppWithSilencedDeviceTuneCommand()
+
+    await expect(
+      app.parseAsync(['node', 'solana-mobile', 'device', 'tune', '--all', '--device', 'SM02E4072816572']),
+    ).rejects.toThrow(`The --all flag can't be used in combination with --device`)
   })
 })
