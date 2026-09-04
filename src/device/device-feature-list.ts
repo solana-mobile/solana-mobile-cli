@@ -1,6 +1,5 @@
 import { runExecutable } from '../core/data-access/run-executable.ts'
-import type { AdbDependencies } from '../localnet/data-access/localnet-types.ts'
-import type { DeviceListCommandOptions } from './data-access/device-types.ts'
+import type { AdbDependencies, DeviceListCommandOptions } from './data-access/device-types.ts'
 import { listConnectedDevices } from './data-access/list-connected-devices.ts'
 import { renderConnectedDevices } from './ui/device-ui-render-connected-devices.ts'
 

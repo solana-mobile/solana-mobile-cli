@@ -1,5 +1,5 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
-import type { AdbDependencies, AdbReverseEntry } from './localnet-types.ts'
+import type { AdbDependencies, AdbReverseEntry } from './device-types.ts'
 
 export async function listAdbReverses(
   serial: string,

@@ -1,14 +1,11 @@
 import { cancel, intro, outro } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import type { AdbDependencies } from '../device/data-access/device-types.ts'
+import { listAdbDevices } from '../device/data-access/list-adb-devices.ts'
 import { collectExistingReverses } from './data-access/apply-forwards.ts'
 import { inspectLocalnetContainer } from './data-access/docker-engine.ts'
-import { listAdbDevices } from './data-access/list-adb-devices.ts'
 import { localnetRpcUrl, resolveLocalnetForContainer } from './data-access/localnet-engines.ts'
-import type {
-  AdbDependencies,
-  LocalnetStatusCommandOptions,
-  LocalnetStatusReport,
-} from './data-access/localnet-types.ts'
+import type { LocalnetStatusCommandOptions, LocalnetStatusReport } from './data-access/localnet-types.ts'
 import { renderLocalnetStatus } from './ui/localnet-ui-render-forwards.ts'
 
 export interface RunLocalnetStatusDependencies extends AdbDependencies {

@@ -1,16 +1,12 @@
 import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
-import { removeAdbReverse } from './data-access/adb-reverse.ts'
+import { removeAdbReverse } from '../device/data-access/adb-reverse.ts'
+import type { AdbDependencies } from '../device/data-access/device-types.ts'
+import { listAdbDevices } from '../device/data-access/list-adb-devices.ts'
 import { collectExistingReverses } from './data-access/apply-forwards.ts'
 import { inspectLocalnetContainer, isManagedContainer, removeLocalnetContainer } from './data-access/docker-engine.ts'
-import { listAdbDevices } from './data-access/list-adb-devices.ts'
 import { resolveLocalnetForContainer } from './data-access/localnet-engines.ts'
-import type {
-  AdbDependencies,
-  LocalnetStopCommandOptions,
-  OwnedForward,
-  ResolvedLocalnetPort,
-} from './data-access/localnet-types.ts'
+import type { LocalnetStopCommandOptions, OwnedForward, ResolvedLocalnetPort } from './data-access/localnet-types.ts'
 import { clearOwnedForwards, readOwnedForwards } from './data-access/owned-forwards-store.ts'
 import { planRemovals } from './data-access/plan-forwards.ts'
 import { unmanagedContainerMessage } from './ui/localnet-ui-messages.ts'

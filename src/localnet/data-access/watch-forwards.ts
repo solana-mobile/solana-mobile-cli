@@ -1,6 +1,7 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
+import type { AdbDependencies } from '../../device/data-access/device-types.ts'
 import { type SyncForwardsResult, syncForwards } from './apply-forwards.ts'
-import type { AdbDependencies, OwnedForward, ResolvedLocalnetPort } from './localnet-types.ts'
+import type { OwnedForward, ResolvedLocalnetPort } from './localnet-types.ts'
 
 export interface WatchForwardsOptions {
   devices?: readonly string[]

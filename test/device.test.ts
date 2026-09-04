@@ -6,10 +6,12 @@ import { join } from 'node:path'
 import { createApp } from '../src/app.ts'
 import type { CommandRunner } from '../src/core/data-access/command-types.ts'
 import type { MultiSelectPrompt, SelectPrompt, TextPrompt } from '../src/core/ui/core-ui-prompt-types.ts'
+import { parseAdbReverses, parseTcpPort } from '../src/device/data-access/adb-reverse.ts'
 import { findApkCatalogEntry, githubReleaseDownloadUrl } from '../src/device/data-access/apk-catalog.ts'
-import type { DeviceTuneCommandOptions } from '../src/device/data-access/device-types.ts'
+import type { AdbDevice, DeviceTuneCommandOptions } from '../src/device/data-access/device-types.ts'
 import { defaultDownloadFile, ensureApkDownloaded } from '../src/device/data-access/download-apk.ts'
 import { buildAdbInstallCommand, extractAdbInstallFailure, installApk } from '../src/device/data-access/install-apk.ts'
+import { parseAdbDevices } from '../src/device/data-access/list-adb-devices.ts'
 import { listConnectedDevices } from '../src/device/data-access/list-connected-devices.ts'
 import { type PathKind, resolveApkArgs } from '../src/device/data-access/resolve-apk-installs.ts'
 import { localhostPort, resolveOpenUrl, validateOpenUrlInput } from '../src/device/data-access/resolve-open-url.ts'
@@ -1064,5 +1066,78 @@ describe('device command', () => {
     await expect(
       app.parseAsync(['node', 'solana-mobile', 'device', 'tune', '--all', '--device', 'SM02E4072816572']),
     ).rejects.toThrow(`The --all flag can't be used in combination with --device`)
+  })
+})
+
+describe('adb primitives', () => {
+  test('parses emulators and physical devices with their states, sorted by serial', () => {
+    const devices = parseAdbDevices(
+      [
+        '* daemon not running; starting now at tcp:5037',
+        '* daemon started successfully',
+        'List of devices attached',
+        'emulator-5554\tdevice',
+        '39281FDJH00KL2\tdevice',
+        'ZY22G9WXYZ\tunauthorized',
+        'R5CT10ABCDE\toffline',
+        '',
+      ].join('\n'),
+    )
+
+    // Sorted with localeCompare, matching listRunningEmulators, so case does not split the list.
+    expect(devices).toEqual([
+      { serial: '39281FDJH00KL2', state: 'device' },
+      { serial: 'emulator-5554', state: 'device' },
+      { serial: 'R5CT10ABCDE', state: 'offline' },
+      { serial: 'ZY22G9WXYZ', state: 'unauthorized' },
+    ] satisfies AdbDevice[])
+  })
+
+  test('reads reverses as device port then host port', () => {
+    // Verified against a live device: `adb reverse tcp:8899 tcp:9899` lists as `host-14 tcp:8899 tcp:9899`.
+    expect(parseAdbReverses(['host-14 tcp:8081 tcp:8081', 'host-14 tcp:8899 tcp:9899', ''].join('\n'))).toEqual([
+      { devicePort: 8081, hostPort: 8081 },
+      { devicePort: 8899, hostPort: 9899 },
+    ])
+  })
+
+  test('reads reverses whatever the transport is labelled', () => {
+    // A USB-attached phone labels the transport `UsbFfs` rather than `host-NN` (seen on a Seeker).
+    expect(parseAdbReverses(['UsbFfs tcp:8899 tcp:8899', 'UsbFfs tcp:18488 tcp:18488'].join('\n'))).toEqual([
+      { devicePort: 8899, hostPort: 8899 },
+      { devicePort: 18488, hostPort: 18488 },
+    ])
+  })
+
+  test('parses a physical device serial alongside an emulator', () => {
+    expect(parseAdbDevices('List of devices attached\nSM02E4072816572\tdevice\nemulator-5554\tdevice\n')).toEqual([
+      { serial: 'emulator-5554', state: 'device' },
+      { serial: 'SM02E4072816572', state: 'device' },
+    ])
+  })
+
+  test('parses wireless adb serials', () => {
+    expect(
+      parseAdbDevices(
+        [
+          'List of devices attached',
+          '192.168.1.42:37013\tdevice',
+          'adb-R5CT10ABCDE-Kj8Xq2._adb-tls-connect._tcp\tdevice',
+        ].join('\n'),
+      ).map(({ serial }) => serial),
+    ).toEqual(['192.168.1.42:37013', 'adb-R5CT10ABCDE-Kj8Xq2._adb-tls-connect._tcp'])
+  })
+
+  test('ignores reverse lines that are not tcp', () => {
+    expect(
+      parseAdbReverses(['host-14 localabstract:foo localabstract:bar', 'host-14 tcp:8899 tcp:8899'].join('\n')),
+    ).toEqual([{ devicePort: 8899, hostPort: 8899 }])
+  })
+
+  test('parses tcp port specs', () => {
+    expect(parseTcpPort('tcp:8899')).toBe(8899)
+    expect(parseTcpPort('localabstract:x')).toBeUndefined()
+    expect(parseTcpPort('tcp:not-a-port')).toBeUndefined()
+    expect(parseTcpPort(undefined)).toBeUndefined()
   })
 })

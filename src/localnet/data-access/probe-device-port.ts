@@ -1,5 +1,6 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
-import type { AdbDependencies, DevicePortProbeResult, ResolvedLocalnetPort } from './localnet-types.ts'
+import type { AdbDependencies } from '../../device/data-access/device-types.ts'
+import type { DevicePortProbeResult, ResolvedLocalnetPort } from './localnet-types.ts'
 
 /**
  * Device-side leg of the check.
@@ -64,16 +65,4 @@ export function parseProbeExitCode(output: string): number | undefined {
   }
 
   return Number(last)
-}
-
-/**
- * Best-effort visual proof: opens a URL in the device browser. Not a programmatic check — on a fresh
- * emulator the browser's first-run screen intercepts the intent.
- */
-export async function openUrlOnDevice(
-  serial: string,
-  url: string,
-  { runCommand = runExecutable }: AdbDependencies = {},
-): Promise<void> {
-  await runCommand(['adb', '-s', serial, 'shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', url])
 }

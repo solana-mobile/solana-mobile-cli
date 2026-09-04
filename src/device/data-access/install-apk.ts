@@ -1,5 +1,5 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
-import type { AdbDependencies } from '../../localnet/data-access/localnet-types.ts'
+import type { AdbDependencies } from './device-types.ts'
 
 export interface AdbInstallOptions {
   downgrade?: boolean

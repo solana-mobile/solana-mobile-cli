@@ -1,4 +1,5 @@
 import type { CommandRunner } from '../../core/data-access/command-types.ts'
+import type { AdbDeviceState, AdbReverseEntry } from '../../device/data-access/device-types.ts'
 
 export type LocalnetEngineId = 'surfpool' | 'test-validator'
 
@@ -37,20 +38,6 @@ export interface ResolvedLocalnet {
   engine: LocalnetEngine
   image: string
   ports: ResolvedLocalnetPort[]
-}
-
-export type AdbDeviceState = 'device' | 'offline' | 'unauthorized' | (string & {})
-
-export interface AdbDevice {
-  serial: string
-  state: AdbDeviceState
-}
-
-export interface AdbReverseEntry {
-  /** Port the device listens on. This is the key `adb reverse --remove` takes. */
-  devicePort: number
-  /** Port the connection is forwarded to on the host. */
-  hostPort: number
 }
 
 export type ForwardActionKind = 'create' | 'keep' | 'replace'
@@ -163,10 +150,6 @@ export interface LocalnetStopCommandOptions extends LocalnetPortOptions {
 export interface OwnedForward {
   devicePort: number
   serial: string
-}
-
-export interface AdbDependencies {
-  runCommand?: CommandRunner
 }
 
 export interface DockerDependencies {
