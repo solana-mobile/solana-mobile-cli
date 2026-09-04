@@ -1,10 +1,10 @@
 import { cancel, log as clackLog, intro, note, outro } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import type { PromptDependencies } from '../core/ui/core-ui-prompt-types.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import type { EmulatorStopCommandOptions, StopEmulatorDependencies } from './data-access/emulator-types.ts'
 import { listRunningEmulators } from './data-access/list-running-emulators.ts'
 import { stopEmulator } from './data-access/stop-emulator.ts'
-import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectRunningEmulatorSerial } from './ui/emulator-ui-select-running-emulator-serial.ts'
 
 interface RunEmulatorStopDependencies extends PromptDependencies, StopEmulatorDependencies {

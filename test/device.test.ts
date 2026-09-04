@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createApp } from '../src/app.ts'
 import type { CommandRunner } from '../src/core/data-access/command-types.ts'
+import type { MultiSelectPrompt, SelectPrompt, TextPrompt } from '../src/core/ui/core-ui-prompt-types.ts'
 import { findApkCatalogEntry, githubReleaseDownloadUrl } from '../src/device/data-access/apk-catalog.ts'
 import type { DeviceTuneCommandOptions } from '../src/device/data-access/device-types.ts'
 import { defaultDownloadFile, ensureApkDownloaded } from '../src/device/data-access/download-apk.ts'
@@ -18,7 +19,6 @@ import { runDeviceOpen } from '../src/device/device-feature-open.ts'
 import { runDeviceTune } from '../src/device/device-feature-tune.ts'
 import { describeReverse } from '../src/device/ui/device-ui-messages.ts'
 import { selectOpenUrl } from '../src/device/ui/device-ui-select-open-url.ts'
-import type { MultiSelectPrompt, SelectPrompt, TextPrompt } from '../src/emulator/ui/emulator-ui-prompt-types.ts'
 
 /** Records every command so tests can assert on what adb was actually asked to do. */
 function recordingRunner(responses: (cmd: string[]) => string): { calls: string[][]; runCommand: CommandRunner } {

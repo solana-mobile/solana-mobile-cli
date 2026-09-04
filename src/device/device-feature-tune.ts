@@ -1,7 +1,7 @@
 import { cancel, log as clackLog, intro, note, outro } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import type { PromptDependencies } from '../core/ui/core-ui-prompt-types.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
-import type { PromptDependencies } from '../emulator/ui/emulator-ui-prompt-types.ts'
 import { isUsableDevice } from '../localnet/data-access/list-adb-devices.ts'
 import type { AdbDependencies } from '../localnet/data-access/localnet-types.ts'
 import type { DeviceTuneCommandOptions } from './data-access/device-types.ts'

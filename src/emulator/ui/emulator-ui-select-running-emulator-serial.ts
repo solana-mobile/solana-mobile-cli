@@ -1,6 +1,6 @@
 import { select } from '@clack/prompts'
+import { resolvePromptCancellation, type SelectPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import type { RunningEmulator } from '../data-access/emulator-types.ts'
-import { resolvePromptCancellation, type SelectPrompt } from './emulator-ui-prompt-types.ts'
 
 export async function selectRunningEmulatorSerial(
   runningEmulators: readonly RunningEmulator[],

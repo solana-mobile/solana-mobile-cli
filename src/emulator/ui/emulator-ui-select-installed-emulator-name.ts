@@ -1,6 +1,6 @@
 import { select } from '@clack/prompts'
+import { resolvePromptCancellation, type SelectPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import type { InstalledAvd } from '../data-access/emulator-types.ts'
-import { resolvePromptCancellation, type SelectPrompt } from './emulator-ui-prompt-types.ts'
 
 export function createInstalledEmulatorOption({ device, name, target }: InstalledAvd) {
   const hint = [device ? `device: ${device}` : undefined, target ? `target: ${target}` : undefined]

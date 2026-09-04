@@ -15,9 +15,7 @@ import { renderDoctorReport } from './ui/doctor-ui-report.ts'
 
 export type DoctorCommandOptions = { json?: boolean; verbose?: boolean }
 
-export async function createDoctorReport(
-  environment: DoctorEnvironment = defaultDoctorEnvironment,
-): Promise<DoctorReport> {
+async function createDoctorReport(environment: DoctorEnvironment = defaultDoctorEnvironment): Promise<DoctorReport> {
   const [disk, packageManagers, java] = await Promise.all([
     checkDiskSpace(environment),
     checkPackageManagers(environment),

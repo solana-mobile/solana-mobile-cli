@@ -1,3 +1,5 @@
+import type { CommandRunner } from '../../core/data-access/command-types.ts'
+import type { AppliedDeviceTweaks } from '../../device/data-access/device-types.ts'
 export interface DirectoryEntry {
   isDirectory(): boolean
   name: string
@@ -61,15 +63,6 @@ export interface EmulatorTuneCommandOptions {
   /** Skip the tweak picker and apply every tweak, for unattended runs. */
   yes?: boolean
 }
-
-import type {
-  CommandRunner,
-  InteractiveCommandRunner,
-  RunCommandOptions,
-} from '../../core/data-access/command-types.ts'
-import type { AppliedDeviceTweaks } from '../../device/data-access/device-types.ts'
-
-export type { CommandRunner, InteractiveCommandRunner, RunCommandOptions }
 
 export interface CreateAvdDependencies {
   getHomeDirectory?: HomeDirectoryResolver

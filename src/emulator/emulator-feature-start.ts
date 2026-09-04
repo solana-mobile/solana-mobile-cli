@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { cancel, log as clackLog, intro, note, outro } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import type { PromptDependencies } from '../core/ui/core-ui-prompt-types.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import type {
   EmulatorStartCommandOptions,
@@ -10,7 +11,6 @@ import type {
 import { defaultReadDirectory, defaultReadTextFile, listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { defaultStartProcess, startEmulator } from './data-access/start-emulator.ts'
 import { waitAndTuneEmulator } from './emulator-feature-tune.ts'
-import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectInstalledEmulatorName } from './ui/emulator-ui-select-installed-emulator-name.ts'
 
 interface RunEmulatorStartDependencies

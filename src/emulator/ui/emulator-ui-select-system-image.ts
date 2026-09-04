@@ -1,6 +1,6 @@
 import { select } from '@clack/prompts'
+import { resolvePromptCancellation, type SelectPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import { parseSystemImagePackage, systemImagePackageToRelativeDirectory } from '../data-access/avd-config.ts'
-import { resolvePromptCancellation, type SelectPrompt } from './emulator-ui-prompt-types.ts'
 
 export async function selectSystemImage(
   systemImages: readonly string[],

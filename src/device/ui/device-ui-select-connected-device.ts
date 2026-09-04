@@ -1,5 +1,5 @@
 import { select } from '@clack/prompts'
-import { resolvePromptCancellation, type SelectPrompt } from '../../emulator/ui/emulator-ui-prompt-types.ts'
+import { resolvePromptCancellation, type SelectPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import type { ConnectedDevice } from '../data-access/device-types.ts'
 
 export async function selectConnectedDeviceSerial(
