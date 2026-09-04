@@ -1,5 +1,6 @@
+import type { CommandRunner } from '../../core/data-access/command-types.ts'
 import { runExecutable } from '../../core/data-access/run-executable.ts'
-import type { CommandRunner, EmulatorStatus, ListEmulatorStatusesDependencies } from './emulator-types.ts'
+import type { EmulatorStatus, ListEmulatorStatusesDependencies } from './emulator-types.ts'
 import { listInstalledAvds } from './list-installed-avds.ts'
 import { parseAdbEmulatorDevices, parseRunningEmulatorName } from './list-running-emulators.ts'
 

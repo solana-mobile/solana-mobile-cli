@@ -1,5 +1,5 @@
 import { confirm, log, password, text } from '@clack/prompts'
-import { resolvePromptCancellation, type TextPrompt } from '../../emulator/ui/emulator-ui-prompt-types.ts'
+import { resolvePromptCancellation, type TextPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import {
   WEBSHELL_KEY_PASSWORD_ENV,
   WEBSHELL_KEYSTORE_PASSWORD_ENV,

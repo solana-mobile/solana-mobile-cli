@@ -71,10 +71,7 @@ const templateOptionPattern = /^--([a-z][a-z0-9-]*)$/
  * remains. create-solana-dapp validates the collected names against the options the cloned
  * template declares.
  */
-export function extractTemplateOptions(
-  command: Command,
-  args: string[],
-): { args: string[]; templateOptions: string[] } {
+function extractTemplateOptions(command: Command, args: string[]): { args: string[]; templateOptions: string[] } {
   const remaining: string[] = []
   const templateOptions = new Set<string>()
   let positionalOnly = false
@@ -133,7 +130,7 @@ function hasInlineValue(arg: string): boolean {
   return arg.startsWith('--') ? arg.includes('=') : arg.length > 2
 }
 
-export function parsePackageManagerOption(next: string): PackageManager {
+function parsePackageManagerOption(next: string): PackageManager {
   if (!next || !isPackageManager(next)) {
     throw new InvalidArgumentError(`Invalid package manager: ${next}`)
   }

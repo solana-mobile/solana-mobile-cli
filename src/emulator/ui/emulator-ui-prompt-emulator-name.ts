@@ -1,6 +1,6 @@
 import { text } from '@clack/prompts'
+import { resolvePromptCancellation, type TextPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import { DEFAULT_PROFILE } from '../data-access/avd-config.ts'
-import { resolvePromptCancellation, type TextPrompt } from './emulator-ui-prompt-types.ts'
 
 export async function promptEmulatorName(
   defaultName: string = DEFAULT_PROFILE.name,

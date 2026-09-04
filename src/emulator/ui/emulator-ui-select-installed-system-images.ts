@@ -1,6 +1,6 @@
 import { multiselect } from '@clack/prompts'
+import { type MultiSelectPrompt, resolvePromptCancellation } from '../../core/ui/core-ui-prompt-types.ts'
 import { systemImagePackageToRelativeDirectory } from '../data-access/avd-config.ts'
-import { type MultiSelectPrompt, resolvePromptCancellation } from './emulator-ui-prompt-types.ts'
 
 export async function selectInstalledSystemImages(
   systemImages: readonly string[],

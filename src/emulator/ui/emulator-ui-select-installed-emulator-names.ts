@@ -1,6 +1,6 @@
 import { multiselect } from '@clack/prompts'
+import { type MultiSelectPrompt, resolvePromptCancellation } from '../../core/ui/core-ui-prompt-types.ts'
 import type { InstalledAvd } from '../data-access/emulator-types.ts'
-import { type MultiSelectPrompt, resolvePromptCancellation } from './emulator-ui-prompt-types.ts'
 import { createInstalledEmulatorOption } from './emulator-ui-select-installed-emulator-name.ts'
 
 export async function selectInstalledEmulatorNames(

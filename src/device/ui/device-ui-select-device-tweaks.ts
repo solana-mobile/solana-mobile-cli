@@ -1,5 +1,5 @@
 import { multiselect } from '@clack/prompts'
-import { type MultiSelectPrompt, resolvePromptCancellation } from '../../emulator/ui/emulator-ui-prompt-types.ts'
+import { type MultiSelectPrompt, resolvePromptCancellation } from '../../core/ui/core-ui-prompt-types.ts'
 import type { DeviceTweak } from '../data-access/device-types.ts'
 import { DEVICE_TWEAKS } from '../data-access/tune-device.ts'
 

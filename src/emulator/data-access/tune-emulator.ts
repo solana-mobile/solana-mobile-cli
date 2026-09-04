@@ -1,8 +1,8 @@
+import type { CommandRunner } from '../../core/data-access/command-types.ts'
 import { runExecutable } from '../../core/data-access/run-executable.ts'
 import type { AppliedDeviceTweaks, ApplyDeviceTweaksOptions } from '../../device/data-access/device-types.ts'
 import { applyDeviceTweaks } from '../../device/data-access/tune-device.ts'
 import type {
-  CommandRunner,
   RunningEmulator,
   TuneEmulatorDependencies,
   TuneEmulatorResult,

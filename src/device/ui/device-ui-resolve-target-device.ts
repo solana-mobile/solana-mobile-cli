@@ -1,4 +1,4 @@
-import type { PromptDependencies } from '../../emulator/ui/emulator-ui-prompt-types.ts'
+import type { PromptDependencies } from '../../core/ui/core-ui-prompt-types.ts'
 import type { ConnectedDevice } from '../data-access/device-types.ts'
 import { selectConnectedDeviceSerial } from './device-ui-select-connected-device.ts'
 

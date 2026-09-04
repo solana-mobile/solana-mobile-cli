@@ -1,5 +1,5 @@
 import { multiselect } from '@clack/prompts'
-import { type MultiSelectPrompt, resolvePromptCancellation } from '../../emulator/ui/emulator-ui-prompt-types.ts'
+import { type MultiSelectPrompt, resolvePromptCancellation } from '../../core/ui/core-ui-prompt-types.ts'
 import type { ApkCatalogEntry } from '../data-access/apk-catalog.ts'
 
 export async function selectCatalogApkNames(

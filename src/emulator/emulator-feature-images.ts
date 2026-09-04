@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { cancel, log as clackLog, intro, note, outro, spinner, taskLog } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import type { PromptDependencies } from '../core/ui/core-ui-prompt-types.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { systemImagePackageToRelativeDirectory } from './data-access/avd-config.ts'
 import type {
@@ -24,7 +25,6 @@ import {
   type SystemImagePackageManagerDependencies,
   uninstallSystemImages,
 } from './data-access/system-image-package-manager.ts'
-import type { PromptDependencies } from './ui/emulator-ui-prompt-types.ts'
 import { selectInstalledSystemImages } from './ui/emulator-ui-select-installed-system-images.ts'
 import { selectSystemImage } from './ui/emulator-ui-select-system-image.ts'
 
