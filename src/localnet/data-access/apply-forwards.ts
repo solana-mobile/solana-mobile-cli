@@ -3,7 +3,7 @@ import { createAdbReverse, listAdbReverses, removeAdbReverse } from '../../devic
 import type { AdbDependencies, AdbDevice, AdbReverseEntry } from '../../device/data-access/device-types.ts'
 import { isUsableDevice, listAdbDevices } from '../../device/data-access/list-adb-devices.ts'
 import type { ForwardAction, OwnedForward, ResolvedLocalnetPort } from './localnet-types.ts'
-import { ownedForwards, pendingForwards, planForwards } from './plan-forwards.ts'
+import { pendingForwards, planForwards } from './plan-forwards.ts'
 
 export async function collectExistingReverses(
   devices: readonly AdbDevice[],
@@ -21,24 +21,6 @@ export async function collectExistingReverses(
   )
 
   return new Map(entries)
-}
-
-/**
- * The forwards a run would create, computed without applying anything.
- *
- * A detached session records this on the container before starting it, because once it exits there is no
- * process left to remember what it claimed. Computing it early means a device that appears in between is
- * simply not claimed — `stop` then leaves that forward alone, which is the safe direction to err.
- */
-export async function planOwnedForwards(
-  { devices: only, ports }: { devices?: readonly string[]; ports: readonly ResolvedLocalnetPort[] },
-  { runCommand = runExecutable }: AdbDependencies = {},
-): Promise<OwnedForward[]> {
-  const all = await listAdbDevices({ runCommand })
-  const devices = only?.length ? all.filter(({ serial }) => only.includes(serial)) : all
-  const existing = await collectExistingReverses(devices, { runCommand })
-
-  return ownedForwards(planForwards({ devices, existing, ports }))
 }
 
 /**
