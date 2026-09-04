@@ -10,7 +10,7 @@ import {
 } from '../src/playground/data-access/playground-clusters.ts'
 import { type PlaygroundServer, startPlaygroundServer } from '../src/playground/data-access/playground-server.ts'
 import type { PlaygroundConfig, PlaygroundEvent } from '../src/playground/data-access/playground-types.ts'
-import { runPlayground } from '../src/playground/playground-feature-serve.ts'
+import { runPlayground } from '../src/playground/playground-feature-index.ts'
 import { renderPlaygroundEvent } from '../src/playground/ui/playground-ui-messages.ts'
 
 const TEST_CONFIG: PlaygroundConfig = {

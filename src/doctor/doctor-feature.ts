@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { type DoctorCommandOptions, runDoctor } from './doctor-feature-check.ts'
+import { type DoctorCommandOptions, runDoctor } from './doctor-feature-index.ts'
 
 export type DoctorCommandDeps = {
   runDoctor?: (options: DoctorCommandOptions) => Promise<number>

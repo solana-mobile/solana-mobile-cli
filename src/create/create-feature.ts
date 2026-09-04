@@ -1,6 +1,6 @@
 import { Command, InvalidArgumentError, type Option } from 'commander'
 import type { PackageManager } from 'create-solana-dapp'
-import { type CreateCommandOptions, runCreate } from './create-feature-scaffold.ts'
+import { type CreateCommandOptions, runCreate } from './create-feature-index.ts'
 import { MINIMAL_TEMPLATE_NAME } from './data-access/template-catalog.ts'
 
 export type CreateCommandDeps = {
