@@ -1,12 +1,12 @@
 import { cancel, intro, outro } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import type { AdbDependencies, AdbReverseEntry } from '../device/data-access/device-types.ts'
+import { isUsableDevice, listAdbDevices } from '../device/data-access/list-adb-devices.ts'
+import { openUrlOnDevice } from '../device/data-access/open-url-on-device.ts'
 import { collectExistingReverses } from './data-access/apply-forwards.ts'
 import { inspectLocalnetContainer } from './data-access/docker-engine.ts'
-import { isUsableDevice, listAdbDevices } from './data-access/list-adb-devices.ts'
 import { findLocalnetPort, localnetRpcUrl, resolveLocalnetForContainer } from './data-access/localnet-engines.ts'
 import type {
-  AdbDependencies,
-  AdbReverseEntry,
   DeviceCheckResult,
   DevicePortProbeResult,
   JsonRpcFetcher,
@@ -16,7 +16,7 @@ import type {
   ResolvedLocalnetPort,
 } from './data-access/localnet-types.ts'
 import { matchReverse } from './data-access/plan-forwards.ts'
-import { openUrlOnDevice, probeDevicePort } from './data-access/probe-device-port.ts'
+import { probeDevicePort } from './data-access/probe-device-port.ts'
 import { defaultJsonRpcFetcher, probeRpc } from './data-access/probe-rpc.ts'
 import { renderLocalnetCheck } from './ui/localnet-ui-render-check.ts'
 

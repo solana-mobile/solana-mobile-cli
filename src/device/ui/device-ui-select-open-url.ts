@@ -1,6 +1,6 @@
 import { select, text } from '@clack/prompts'
 import { resolvePromptCancellation, type SelectPrompt, type TextPrompt } from '../../core/ui/core-ui-prompt-types.ts'
-import type { AdbReverseEntry } from '../../localnet/data-access/localnet-types.ts'
+import type { AdbReverseEntry } from '../data-access/device-types.ts'
 import { resolveOpenUrl, validateOpenUrlInput } from '../data-access/resolve-open-url.ts'
 import { describeReverse } from './device-ui-messages.ts'
 

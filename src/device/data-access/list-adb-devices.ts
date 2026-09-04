@@ -1,5 +1,5 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
-import type { AdbDependencies, AdbDevice } from './localnet-types.ts'
+import type { AdbDependencies, AdbDevice } from './device-types.ts'
 
 /**
  * Lists every adb device, unlike `listRunningEmulators`, which is deliberately limited to `emulator-*`

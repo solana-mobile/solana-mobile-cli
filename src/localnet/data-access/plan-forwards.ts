@@ -1,5 +1,6 @@
-import { isUsableDevice } from './list-adb-devices.ts'
-import type { AdbDevice, AdbReverseEntry, ForwardAction, OwnedForward, ResolvedLocalnetPort } from './localnet-types.ts'
+import type { AdbDevice, AdbReverseEntry } from '../../device/data-access/device-types.ts'
+import { isUsableDevice } from '../../device/data-access/list-adb-devices.ts'
+import type { ForwardAction, OwnedForward, ResolvedLocalnetPort } from './localnet-types.ts'
 
 export interface PlanForwardsInput {
   devices: readonly AdbDevice[]

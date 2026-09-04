@@ -1,6 +1,11 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
-import type { AdbDependencies } from '../../localnet/data-access/localnet-types.ts'
-import type { AppliedDeviceTweaks, ApplyDeviceTweaksOptions, DeviceTweak, SkippedDeviceTweak } from './device-types.ts'
+import type {
+  AdbDependencies,
+  AppliedDeviceTweaks,
+  ApplyDeviceTweaksOptions,
+  DeviceTweak,
+  SkippedDeviceTweak,
+} from './device-types.ts'
 
 export const DEVICE_TWEAKS: readonly DeviceTweak[] = [
   {

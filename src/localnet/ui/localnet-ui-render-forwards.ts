@@ -1,5 +1,6 @@
 import { log } from '@clack/prompts'
-import type { AdbDevice, ForwardAction, LocalnetStatusReport } from '../data-access/localnet-types.ts'
+import type { AdbDevice } from '../../device/data-access/device-types.ts'
+import type { ForwardAction, LocalnetStatusReport } from '../data-access/localnet-types.ts'
 import { DEVICES_HEADING, NO_DEVICES_MESSAGE, VALIDATOR_HEADING } from './localnet-ui-messages.ts'
 
 /** Marks a re-sync during `--watch`, so a table appearing later has a visible reason. */

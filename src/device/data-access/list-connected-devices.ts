@@ -1,8 +1,7 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
 import { parseRunningEmulatorName } from '../../emulator/data-access/list-running-emulators.ts'
-import { isUsableDevice, listAdbDevices } from '../../localnet/data-access/list-adb-devices.ts'
-import type { AdbDependencies } from '../../localnet/data-access/localnet-types.ts'
-import type { ConnectedDevice } from './device-types.ts'
+import type { AdbDependencies, ConnectedDevice } from './device-types.ts'
+import { isUsableDevice, listAdbDevices } from './list-adb-devices.ts'
 
 /**
  * Every adb device with a human-readable name attached: the AVD name for emulators, the product model

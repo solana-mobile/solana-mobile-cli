@@ -1,14 +1,8 @@
 import { runExecutable } from '../../core/data-access/run-executable.ts'
-import { createAdbReverse, listAdbReverses, removeAdbReverse } from './adb-reverse.ts'
-import { isUsableDevice, listAdbDevices } from './list-adb-devices.ts'
-import type {
-  AdbDependencies,
-  AdbDevice,
-  AdbReverseEntry,
-  ForwardAction,
-  OwnedForward,
-  ResolvedLocalnetPort,
-} from './localnet-types.ts'
+import { createAdbReverse, listAdbReverses, removeAdbReverse } from '../../device/data-access/adb-reverse.ts'
+import type { AdbDependencies, AdbDevice, AdbReverseEntry } from '../../device/data-access/device-types.ts'
+import { isUsableDevice, listAdbDevices } from '../../device/data-access/list-adb-devices.ts'
+import type { ForwardAction, OwnedForward, ResolvedLocalnetPort } from './localnet-types.ts'
 import { ownedForwards, pendingForwards, planForwards } from './plan-forwards.ts'
 
 export async function collectExistingReverses(

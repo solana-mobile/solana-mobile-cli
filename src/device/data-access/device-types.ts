@@ -1,4 +1,22 @@
-import type { AdbDevice } from '../../localnet/data-access/localnet-types.ts'
+import type { CommandRunner } from '../../core/data-access/command-types.ts'
+
+export interface AdbDependencies {
+  runCommand?: CommandRunner
+}
+
+export type AdbDeviceState = 'device' | 'offline' | 'unauthorized' | (string & {})
+
+export interface AdbDevice {
+  serial: string
+  state: AdbDeviceState
+}
+
+export interface AdbReverseEntry {
+  /** Port the device listens on. This is the key `adb reverse --remove` takes. */
+  devicePort: number
+  /** Port the connection is forwarded to on the host. */
+  hostPort: number
+}
 
 export interface ApplyDeviceTweaksOptions {
   /** Defaults to every tweak in `DEVICE_TWEAKS`. */

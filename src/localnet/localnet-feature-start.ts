@@ -1,6 +1,7 @@
 import { cancel, log as clackLog, intro, note, outro, spinner } from '@clack/prompts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
+import type { AdbDependencies } from '../device/data-access/device-types.ts'
 import { syncForwards } from './data-access/apply-forwards.ts'
 import {
   inspectLocalnetContainer,
@@ -16,7 +17,6 @@ import {
   resolveLocalnetForContainer,
 } from './data-access/localnet-engines.ts'
 import type {
-  AdbDependencies,
   JsonRpcFetcher,
   LocalnetStartCommandOptions,
   OwnedForward,
