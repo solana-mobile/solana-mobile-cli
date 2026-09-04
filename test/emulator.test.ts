@@ -2387,6 +2387,7 @@ describe('emulator command', () => {
 
     expect(emulatorTuneOptions).toEqual([{ nameOrSerial: undefined }, { nameOrSerial: 'Alpha', yes: true }])
   })
+
   test('registers emulator alias and subcommands', () => {
     const emulatorCommand = createApp().commands.find((command) => command.name() === 'emulator')
 
@@ -2402,6 +2403,7 @@ describe('emulator command', () => {
       'tune',
     ])
   })
+
   test('does not delegate emulator command to list', async () => {
     const emulatorListOptions: Array<Record<string, never>> = []
     const app = createApp({
@@ -2425,6 +2427,7 @@ describe('emulator command', () => {
 
     expect(emulatorListOptions).toEqual([])
   })
+
   test('delegates emulator list command options', async () => {
     const emulatorListOptions: Array<Record<string, never>> = []
     const app = createApp({
@@ -2437,6 +2440,7 @@ describe('emulator command', () => {
 
     expect(emulatorListOptions).toEqual([{}])
   })
+
   test('delegates emulator alias list command options', async () => {
     const emulatorListOptions: Array<Record<string, never>> = []
     const app = createApp({
@@ -2449,6 +2453,7 @@ describe('emulator command', () => {
 
     expect(emulatorListOptions).toEqual([{}])
   })
+
   test('does not delegate emulator images command to list', async () => {
     const emulatorImagesOptions: EmulatorImagesCommandOptions[] = []
     const app = createApp({
@@ -2471,6 +2476,7 @@ describe('emulator command', () => {
     expect(emulatorImagesCommand?.commands.map((command) => command.name())).toEqual(['delete', 'install', 'list'])
     expect(emulatorImagesOptions).toEqual([])
   })
+
   test('delegates emulator images delete command options', async () => {
     const emulatorImagesDeleteOptions: EmulatorImagesDeleteCommandOptions[] = []
     const app = createApp({
@@ -2501,6 +2507,7 @@ describe('emulator command', () => {
       },
     ])
   })
+
   test('delegates emulator images install command options', async () => {
     const emulatorImagesInstallOptions: EmulatorImagesInstallCommandOptions[] = []
     const app = createApp({
@@ -2531,6 +2538,7 @@ describe('emulator command', () => {
       },
     ])
   })
+
   test('delegates emulator images list command options', async () => {
     const emulatorImagesOptions: EmulatorImagesCommandOptions[] = []
     const app = createApp({
@@ -2543,6 +2551,7 @@ describe('emulator command', () => {
 
     expect(emulatorImagesOptions).toEqual([{ sdkRoot: '/sdk' }])
   })
+
   test('delegates emulator create command options', async () => {
     const emulatorCreateOptions: EmulatorCreateCommandOptions[] = []
     const app = createApp({
@@ -2595,6 +2604,7 @@ describe('emulator command', () => {
       },
     ])
   })
+
   test('delegates emulator delete command options', async () => {
     const emulatorDeleteOptions: EmulatorDeleteCommandOptions[] = []
     const app = createApp({
@@ -2607,6 +2617,7 @@ describe('emulator command', () => {
 
     expect(emulatorDeleteOptions).toEqual([{ names: ['Alpha', 'Beta'], sdkRoot: '/sdk' }])
   })
+
   test('delegates emulator delete without names', async () => {
     const emulatorDeleteOptions: EmulatorDeleteCommandOptions[] = []
     const app = createApp({
@@ -2619,6 +2630,7 @@ describe('emulator command', () => {
 
     expect(emulatorDeleteOptions).toEqual([{ names: [] }])
   })
+
   test('delegates emulator start command options', async () => {
     const emulatorStartOptions: EmulatorStartCommandOptions[] = []
     const app = createApp({
@@ -2631,6 +2643,7 @@ describe('emulator command', () => {
 
     expect(emulatorStartOptions).toEqual([{ name: 'Alpha', sdkRoot: '/sdk', tune: true }])
   })
+
   test('delegates emulator start without name', async () => {
     const emulatorStartOptions: EmulatorStartCommandOptions[] = []
     const app = createApp({
@@ -2643,6 +2656,7 @@ describe('emulator command', () => {
 
     expect(emulatorStartOptions).toEqual([{ name: undefined }])
   })
+
   test('delegates emulator stop command options', async () => {
     const emulatorStopOptions: EmulatorStopCommandOptions[] = []
     const app = createApp({
@@ -2655,6 +2669,7 @@ describe('emulator command', () => {
 
     expect(emulatorStopOptions).toEqual([{ nameOrSerial: 'Alpha' }])
   })
+
   test('delegates emulator status command options', async () => {
     const emulatorStatusOptions: EmulatorStatusCommandOptions[] = []
     const app = createApp({
@@ -2667,6 +2682,7 @@ describe('emulator command', () => {
 
     expect(emulatorStatusOptions).toEqual([{ nameOrSerial: 'Alpha' }])
   })
+
   test('delegates emulator status without name or serial', async () => {
     const emulatorStatusOptions: EmulatorStatusCommandOptions[] = []
     const app = createApp({
@@ -2679,6 +2695,7 @@ describe('emulator command', () => {
 
     expect(emulatorStatusOptions).toEqual([{ nameOrSerial: undefined }])
   })
+
   test('delegates emulator stop without name or serial', async () => {
     const emulatorStopOptions: EmulatorStopCommandOptions[] = []
     const app = createApp({

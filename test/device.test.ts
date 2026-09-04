@@ -1043,6 +1043,7 @@ describe('device command', () => {
 
     expect(deviceCommand?.commands.map((command) => command.name())).toEqual(['install', 'list', 'open', 'tune'])
   })
+
   test('delegates device tune command options', async () => {
     const deviceTuneOptions: DeviceTuneCommandOptions[] = []
     const app = createApp({
@@ -1056,6 +1057,7 @@ describe('device command', () => {
 
     expect(deviceTuneOptions).toEqual([{ device: 'SM02E4072816572' }, { all: true, yes: true }])
   })
+
   test('rejects device tune with both --all and --device', async () => {
     const app = createAppWithSilencedDeviceTuneCommand()
 

@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { cancel, intro, isCancel, log, note, outro, select, text } from '@clack/prompts'
-import { type Command, InvalidArgumentError, type Option } from 'commander'
 import {
   type CreateAppArgs,
   createApp,
@@ -17,12 +16,8 @@ import {
   type Template,
   type TemplateJsonTemplate,
 } from 'create-solana-dapp'
+import { CUSTOM_TEMPLATES_URL } from './data-access/template-catalog.ts'
 import { projectNameSchema, validateProjectName } from './data-access/validate-project-name.ts'
-
-export const CUSTOM_TEMPLATES_URL = 'https://raw.githubusercontent.com/solana-mobile/templates/main/templates.json'
-
-// Must match a template name in CUSTOM_TEMPLATES_URL, otherwise `--minimal` falls through to `gh:` resolution.
-export const MINIMAL_TEMPLATE_NAME = 'expo-kit-minimal'
 
 const SOLANA_MOBILE_MENU_CONFIG: MenuConfig = [
   {
@@ -201,91 +196,6 @@ export async function runCreate(
       exit(1)
     }
   }
-}
-
-const templateOptionPattern = /^--([a-z][a-z0-9-]*)$/
-
-/**
- * Extracts template-defined option flags such as `--reset-project` from the create command's raw
- * arguments before commander parses them, mirroring the extraction create-solana-dapp performs on
- * its own argv. Working on the raw arguments is what keeps `--` semantics intact — commander drops
- * the separator (or keeps it, depending on what precedes it) before leftovers are visible — and it
- * leaves commander's own unknown-option and excess-argument checks active for everything that
- * remains. create-solana-dapp validates the collected names against the options the cloned
- * template declares.
- */
-export function extractTemplateOptions(
-  command: Command,
-  args: string[],
-): { args: string[]; templateOptions: string[] } {
-  const remaining: string[] = []
-  const templateOptions = new Set<string>()
-  let positionalOnly = false
-  let preserveNextArgument = false
-
-  for (const arg of args) {
-    if (positionalOnly || preserveNextArgument) {
-      remaining.push(arg)
-      preserveNextArgument = false
-      continue
-    }
-
-    if (arg === '--') {
-      positionalOnly = true
-      remaining.push(arg)
-      continue
-    }
-
-    const knownOption = findKnownOption(command, arg)
-
-    if (knownOption) {
-      remaining.push(arg)
-      preserveNextArgument = Boolean(knownOption.required) && !hasInlineValue(arg)
-      continue
-    }
-
-    // The help option is registered outside `command.options`, so it needs its own pass-through
-    if (!arg.startsWith('-') || arg === '-h' || arg === '--help') {
-      remaining.push(arg)
-      continue
-    }
-
-    const name = templateOptionPattern.exec(arg)?.[1]
-
-    if (!name) {
-      throw new InvalidArgumentError(
-        `Template options must be boolean long flags such as --reset-project; received "${arg}".`,
-      )
-    }
-
-    templateOptions.add(name)
-  }
-
-  return { args: remaining, templateOptions: [...templateOptions] }
-}
-
-function findKnownOption(command: Command, arg: string): Option | undefined {
-  // Check both flags: a dual-flag option such as `--pm, --package-manager` stores `--pm` as `short`
-  const flag = arg.startsWith('--') ? (arg.split('=', 1)[0] ?? arg) : arg.slice(0, 2)
-
-  return command.options.find((option) => option.short === flag || option.long === flag)
-}
-
-// A value attached to the flag itself (`--pm=pnpm`, `-tvalue`) means the next argument is not its value
-function hasInlineValue(arg: string): boolean {
-  return arg.startsWith('--') ? arg.includes('=') : arg.length > 2
-}
-
-export function parsePackageManagerOption(next: string): PackageManager {
-  if (!next || !isPackageManager(next)) {
-    throw new InvalidArgumentError(`Invalid package manager: ${next}`)
-  }
-
-  return next
-}
-
-function isPackageManager(value: string): value is PackageManager {
-  return value === 'bun' || value === 'npm' || value === 'pnpm' || value === 'yarn'
 }
 
 // Templates from the catalog are named with a plain slug, but external (`org/repo`) templates keep
