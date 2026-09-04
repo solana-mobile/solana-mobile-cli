@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { access, readdir, realpath, statfs } from 'node:fs/promises'
 import { homedir, platform, release } from 'node:os'
-import { delimiter, dirname, extname, join, resolve, sep } from 'node:path'
+import { delimiter, join, sep } from 'node:path'
 
 export type CommandResult = { path: string; stderr: string; stdout: string }
 export type CommandRunner = (command: string, args?: string[]) => Promise<CommandResult>
@@ -88,8 +88,4 @@ export function compareVersions(left: string, right: string) {
     if (difference !== 0) return difference
   }
   return 0
-}
-
-export function executableDirectory(path: string) {
-  return extname(path) ? dirname(path) : resolve(path)
 }

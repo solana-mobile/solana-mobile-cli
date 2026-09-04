@@ -1,4 +1,4 @@
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import type { DoctorCheckResult } from './doctor-check-result.ts'
 import { type DoctorEnvironment, findExecutable, parseVersion, sortVersions } from './doctor-environment.ts'
 
@@ -200,7 +200,4 @@ export function selectHighestBuildToolsVersion(entries: string[]) {
 }
 export function parseEmulatorVersion(output: string) {
   return output.match(/Android emulator version\s+(\d+(?:\.\d+)*)/i)?.[1] ?? parseVersion(output)
-}
-export function sdkComponentName(path: string) {
-  return basename(path)
 }
