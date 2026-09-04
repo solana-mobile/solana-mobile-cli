@@ -2,7 +2,7 @@ import { Command, InvalidArgumentError } from 'commander'
 import { parseIntegerOption } from '../core/ui/core-ui-command-options.ts'
 import { parsePlaygroundClusterId } from './data-access/playground-clusters.ts'
 import type { PlaygroundClusterId, PlaygroundCommandOptions } from './data-access/playground-types.ts'
-import { runPlayground } from './playground-feature-serve.ts'
+import { runPlayground } from './playground-feature-index.ts'
 
 export type PlaygroundCommandDeps = {
   runPlayground?: (options: PlaygroundCommandOptions) => Promise<void>
