@@ -1022,6 +1022,7 @@ describe('templates command', () => {
 
     expect(templatesCommand?.commands.map((command) => command.name())).toEqual(['check', 'generate', 'sync'])
   })
+
   test('does not delegate templates command to check', async () => {
     const templatesCheckOptions: TemplatesCheckCommandOptions[] = []
     const app = createApp({
@@ -1040,6 +1041,7 @@ describe('templates command', () => {
 
     expect(templatesCheckOptions).toEqual([])
   })
+
   test('delegates templates check command options', async () => {
     const templatesCheckOptions: TemplatesCheckCommandOptions[] = []
     const app = createApp({
@@ -1052,6 +1054,7 @@ describe('templates command', () => {
 
     expect(templatesCheckOptions).toEqual([{ root: '/repo' }])
   })
+
   test('delegates templates generate command options', async () => {
     const templatesGenerateOptions: TemplatesGenerateCommandOptions[] = []
     const app = createApp({

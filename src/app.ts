@@ -6,13 +6,7 @@ import {
   type VersionCheckResult,
 } from './core/data-access/version-check.ts'
 import { formatUpdateWarning } from './core/ui/core-ui-update-warning.ts'
-import {
-  type CreateCommandOptions,
-  extractTemplateOptions,
-  MINIMAL_TEMPLATE_NAME,
-  parsePackageManagerOption,
-  runCreate,
-} from './create/create-feature-index.ts'
+import { type CreateCommandDeps, createCreateCommand } from './create/create-feature.ts'
 import { createDeviceCommand, type DeviceCommandDeps } from './device/device-feature.ts'
 import { createDoctorCommand, type DoctorCommandDeps } from './doctor/doctor-feature.ts'
 import { createEmulatorCommand, type EmulatorCommandDeps } from './emulator/emulator-feature.ts'
@@ -21,7 +15,8 @@ import { createPlaygroundCommand, type PlaygroundCommandDeps } from './playgroun
 import { createTemplatesCommand, type TemplatesCommandDeps } from './templates/templates-feature.ts'
 import { createWebshellCommand, type WebshellCommandDeps } from './webshell/webshell-feature.ts'
 
-export type AppOptions = DeviceCommandDeps &
+export type AppOptions = CreateCommandDeps &
+  DeviceCommandDeps &
   DoctorCommandDeps &
   EmulatorCommandDeps &
   LocalnetCommandDeps &
@@ -29,14 +24,10 @@ export type AppOptions = DeviceCommandDeps &
   TemplatesCommandDeps &
   WebshellCommandDeps & {
     checkForNewerVersion?: (options: VersionCheckOptions) => Promise<VersionCheckResult | undefined>
-    runCreate?: (options: CreateCommandOptions) => Promise<void>
   }
 
 export function createApp(appOptions: AppOptions = {}) {
-  const {
-    checkForNewerVersion: checkForNewerVersionFn = checkForNewerVersion,
-    runCreate: runCreateCommand = runCreate,
-  } = appOptions
+  const { checkForNewerVersion: checkForNewerVersionFn = checkForNewerVersion } = appOptions
   const metadata = readPackageMetadata()
   const app = new Command()
 
@@ -62,58 +53,10 @@ export function createApp(appOptions: AppOptions = {}) {
     }
   })
 
-  // Template options (e.g. `--reset-project`) are extracted from the raw arguments before
-  // commander parses them: commander drops the `--` separator and reroutes operands once it hits
-  // an unknown option, so the leftovers arrive too mangled to parse reliably.
-  let createTemplateOptions: string[] = []
-
-  const createCommand = app
-    .command('create [projectName]')
-    .description('Create a new Solana Mobile project')
-    .option('--pm, --package-manager <packageManager>', 'Package manager to use', parsePackageManagerOption)
-    .option('-d, --dry-run', 'Dry run')
-    .option('-t, --template <templateName>', 'Use a template')
-    .option('--list-template-ids', 'List available template ids as JSON array')
-    .option('--list-templates', 'List available templates')
-    .option('--list-versions', 'Verify your versions of Anchor, AVM, Rust, and Solana')
-    .option('--minimal', 'Use the minimal template')
-    .option('--skip-git', 'Skip git initialization')
-    .option('--skip-init', 'Skip running the init script')
-    .option('--skip-install', 'Skip installing dependencies')
-    .option('-v, --verbose', 'Verbose output')
-    .addHelpText(
-      'after',
-      '\nOptions declared by the selected template are passed through as boolean long flags, e.g.:\n  $ solana-mobile create my-app --minimal --reset-project',
-    )
-    .action(async (projectName: string | undefined, options: CreateCommandOptions) => {
-      if (options.minimal && options.template) {
-        createCommand.error(
-          `error: The --minimal flag can't be used in combination with --template. Please specify only one.`,
-        )
-      }
-
-      await runCreateCommand({
-        ...options,
-        projectName,
-        template: options.template ?? (options.minimal ? MINIMAL_TEMPLATE_NAME : undefined),
-        templateOptions: createTemplateOptions,
-      })
-    })
-
-  const parseCreateCommandOptions = createCommand.parseOptions.bind(createCommand)
-  createCommand.parseOptions = (argv: string[]) => {
-    try {
-      const extracted = extractTemplateOptions(createCommand, argv)
-      createTemplateOptions = extracted.templateOptions
-      return parseCreateCommandOptions(extracted.args)
-    } catch (error) {
-      return createCommand.error(`error: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
   // Registered in alphabetical order, which is the order they are listed in help output. Every
   // feature owns the wiring for its own command and picks the dependencies it needs out of
   // `appOptions`.
+  app.addCommand(createCreateCommand(appOptions))
   app.addCommand(createDeviceCommand(appOptions))
   app.addCommand(createDoctorCommand(appOptions))
   app.addCommand(createEmulatorCommand(appOptions))
