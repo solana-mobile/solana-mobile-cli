@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import type { CommandRunner, InteractiveCommandRunner } from '../../core/data-access/command-types.ts'
-import { runExecutable, runInteractiveExecutable } from '../../core/data-access/run-executable.ts'
+import { runInteractiveExecutable } from '../../core/data-access/run-executable.ts'
 import { parseSystemImagePackage, systemImagePackageToRelativeDirectory } from './avd-config.ts'
 import { defaultPathExists } from './create-avd.ts'
 import type { DirectoryReader, PathChecker } from './emulator-types.ts'
@@ -8,9 +8,7 @@ import { defaultReadDirectory } from './list-installed-avds.ts'
 import { sortSystemImagesNewestFirst } from './list-installed-system-images.ts'
 import { resolveAndroidCommandLineTool } from './resolve-android-command-line-tool.ts'
 
-const GOOGLE_PLAY_SYSTEM_IMAGES_PATTERN = 'system-images/*/google_apis_playstore*/*'
-
-interface AndroidSdkPackageManager {
+export interface AndroidSdkPackageManager {
   executable: string
   type: 'android' | 'sdkmanager'
 }
@@ -55,25 +53,15 @@ export async function installSystemImage(
     packageManager.type === 'android' ? systemImagePackageToRelativeDirectory(systemImage) : systemImage
   const args = packageManager.type === 'android' ? ['sdk', 'install', packageName] : ['--install', packageName]
 
-  await runInteractiveCommand([packageManager.executable, ...args])
-}
-
-export async function listAvailableSystemImages(
-  sdkRoot: string,
-  {
-    pathExists = defaultPathExists(),
-    platform,
-    readDirectory,
-    runCommand = runExecutable,
-  }: SystemImagePackageManagerDependencies = {},
-): Promise<string[]> {
-  const packageManager = await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, platform, readDirectory })
-  const command: [string, ...string[]] =
-    packageManager.type === 'android'
-      ? [packageManager.executable, 'sdk', 'list', '--all', GOOGLE_PLAY_SYSTEM_IMAGES_PATTERN]
-      : [packageManager.executable, '--list']
-
-  return parseSystemImagePackages(await runCommand(command))
+  try {
+    await runInteractiveCommand([packageManager.executable, ...args])
+  } catch (error) {
+    // On Windows the installer aborts on exit (STATUS_STACK_BUFFER_OVERRUN) after a complete install, so its exit
+    // code cannot judge the install. The package on disk can. See solana-mobile/solana-mobile-cli#51.
+    if (!(await pathExists(join(sdkRoot, systemImagePackageToRelativeDirectory(systemImage), 'source.properties')))) {
+      throw error
+    }
+  }
 }
 
 export async function listInstalledAndroidPlatforms(
@@ -122,29 +110,17 @@ export function normalizeSystemImagePackage(systemImage: string): string {
   return normalized
 }
 
-export function parseSystemImagePackages(output: string): string[] {
-  const matches = output.matchAll(/^\s*(system-images(?:[;/][^\s|]+){3})(?:\s|\||$)/gm)
-  const systemImages = [...matches].map((match) => normalizeSystemImagePackage(match[1] as string))
-
-  return [...new Set(systemImages)].sort((left, right) => left.localeCompare(right))
-}
-
-function getAbiForArchitecture(architecture: string): string {
-  if (architecture === 'arm64') {
-    return 'arm64-v8a'
-  }
-
-  if (architecture === 'x64') {
-    return 'x86_64'
-  }
-
-  throw new Error(`Unsupported host architecture: ${architecture}`)
-}
-
-async function resolveAndroidSdkPackageManager(
+/** The tool that installs and removes SDK packages: the Android CLI, or `sdkmanager` on older Command-line Tools. */
+export async function resolveAndroidSdkPackageManager(
   sdkRoot: string,
-  dependencies: { pathExists: PathChecker; platform?: NodeJS.Platform; readDirectory?: DirectoryReader },
+  {
+    pathExists = defaultPathExists(),
+    platform,
+    readDirectory,
+  }: Pick<SystemImagePackageManagerDependencies, 'pathExists' | 'platform' | 'readDirectory'> = {},
 ): Promise<AndroidSdkPackageManager> {
+  const dependencies = { pathExists, platform, readDirectory }
+
   try {
     return {
       executable: await resolveAndroidCommandLineTool(sdkRoot, 'android', dependencies),
@@ -162,4 +138,16 @@ async function resolveAndroidSdkPackageManager(
       )
     }
   }
+}
+
+function getAbiForArchitecture(architecture: string): string {
+  if (architecture === 'arm64') {
+    return 'arm64-v8a'
+  }
+
+  if (architecture === 'x64') {
+    return 'x86_64'
+  }
+
+  throw new Error(`Unsupported host architecture: ${architecture}`)
 }

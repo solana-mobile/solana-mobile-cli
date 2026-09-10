@@ -3,6 +3,7 @@ import { access, readdir, realpath, statfs } from 'node:fs/promises'
 import { homedir, platform, release } from 'node:os'
 import { join, sep } from 'node:path'
 import { findExecutable as findExecutableOnPath } from '../../core/data-access/executable-lookup.ts'
+import { resolveSpawnCommand } from '../../core/data-access/run-executable.ts'
 
 export type CommandResult = { path: string; stderr: string; stdout: string }
 export type CommandRunner = (command: string, args?: string[]) => Promise<CommandResult>
@@ -40,9 +41,15 @@ export const defaultDoctorEnvironment: DoctorEnvironment = {
   runCommand: runExecutable,
 }
 
-export function runExecutable(command: string, args: string[] = [], timeout = 5_000): Promise<CommandResult> {
+export function runExecutable(
+  command: string,
+  args: string[] = [],
+  timeout = 5_000,
+  platform: NodeJS.Platform = process.platform,
+): Promise<CommandResult> {
   return new Promise((resolvePromise, reject) => {
-    const child = execFile(command, args, { timeout, windowsHide: true }, (error, stdout, stderr) => {
+    const [file, ...fileArgs] = resolveSpawnCommand([command, ...args], platform)
+    const child = execFile(file, fileArgs, { timeout, windowsHide: true }, (error, stdout, stderr) => {
       if (error) {
         reject(error)
         return
