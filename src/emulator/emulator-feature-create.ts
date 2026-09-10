@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { cancel, log as clackLog, intro, note, outro, tasks } from '@clack/prompts'
+import { resolveAndroidSdkRoot } from '../core/data-access/android-sdk-root.ts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { resolveEmulatorProfile } from './data-access/avd-config.ts'
@@ -13,7 +14,6 @@ import type {
 } from './data-access/emulator-types.ts'
 import { defaultReadDirectory, defaultReadTextFile } from './data-access/list-installed-avds.ts'
 import { listInstalledSystemImages, resolveInstalledSystemImage } from './data-access/list-installed-system-images.ts'
-import { resolveAndroidSdkRoot } from './data-access/resolve-android-sdk-root.ts'
 import { defaultStartProcess, startEmulator } from './data-access/start-emulator.ts'
 import { type InstallEmulatorSystemImageDependencies, installEmulatorSystemImage } from './emulator-feature-images.ts'
 import { waitAndTuneEmulator } from './emulator-feature-tune.ts'
@@ -44,6 +44,7 @@ export async function runEmulatorCreate(
     note: showNote = note,
     outro: showOutro = outro,
     pathExists = defaultPathExists(),
+    platform,
     pollIntervalMs,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
@@ -95,6 +96,7 @@ export async function runEmulatorCreate(
             architecture,
             log,
             pathExists,
+            platform,
             readDirectory,
             runCommand,
             runInteractiveCommand,
@@ -135,6 +137,7 @@ export async function runEmulatorCreate(
               {
                 getHomeDirectory,
                 pathExists,
+                platform,
                 readDirectory,
                 readTextFile,
                 runCommand,
@@ -171,6 +174,7 @@ export async function runEmulatorCreate(
         { name: result.name, sdkRoot: result.sdkRoot },
         {
           getHomeDirectory,
+          platform,
           readDirectory,
           readTextFile,
           startProcess,

@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { cancel, log as clackLog, intro, note, outro, spinner, taskLog } from '@clack/prompts'
+import { resolveAndroidSdkRoot } from '../core/data-access/android-sdk-root.ts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
 import type { PromptDependencies } from '../core/ui/core-ui-prompt-types.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
@@ -14,7 +15,6 @@ import type {
 } from './data-access/emulator-types.ts'
 import { listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { listInstalledSystemImages, resolveInstalledSystemImage } from './data-access/list-installed-system-images.ts'
-import { resolveAndroidSdkRoot } from './data-access/resolve-android-sdk-root.ts'
 import {
   filterCompatibleSystemImages,
   filterSystemImagesForPlatform,
@@ -115,6 +115,7 @@ export async function runEmulatorImagesDelete(
     note: showNote = note,
     outro: showOutro = outro,
     pathExists,
+    platform,
     readDirectory,
     readTextFile,
     runCommand = runExecutable,
@@ -189,6 +190,7 @@ export async function runEmulatorImagesDelete(
 
     await uninstallSystemImages(systemImages, sdkRoot, {
       pathExists,
+      platform,
       readDirectory,
       runInteractiveCommand: runSystemImageUninstall,
     })
@@ -230,6 +232,7 @@ export async function installEmulatorSystemImage(
     architecture = process.arch,
     log = clackLog.message,
     pathExists,
+    platform,
     readDirectory,
     runCommand = runExecutable,
     runInteractiveCommand,
@@ -265,6 +268,7 @@ export async function installEmulatorSystemImage(
     try {
       availableSystemImages = await listAvailableSystemImages(sdkRoot, {
         pathExists,
+        platform,
         readDirectory,
         runCommand: async (command) => {
           const output = await runCommand(command)
@@ -282,7 +286,12 @@ export async function installEmulatorSystemImage(
     fetchSpinner.start('Fetching available system images')
 
     try {
-      availableSystemImages = await listAvailableSystemImages(sdkRoot, { pathExists, readDirectory, runCommand })
+      availableSystemImages = await listAvailableSystemImages(sdkRoot, {
+        pathExists,
+        platform,
+        readDirectory,
+        runCommand,
+      })
       fetchSpinner.stop('Fetched available system images')
     } catch (error) {
       fetchSpinner.error(error instanceof Error ? error.message : String(error))
@@ -337,6 +346,7 @@ export async function installEmulatorSystemImage(
 
   await installSystemImage(systemImage, sdkRoot, {
     pathExists,
+    platform,
     readDirectory,
     runInteractiveCommand: runSystemImageInstall,
   })

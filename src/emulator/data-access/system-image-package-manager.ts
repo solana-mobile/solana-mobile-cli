@@ -17,6 +17,7 @@ interface AndroidSdkPackageManager {
 
 export interface SystemImagePackageManagerDependencies {
   pathExists?: PathChecker
+  platform?: NodeJS.Platform
   readDirectory?: DirectoryReader
   runCommand?: CommandRunner
   runInteractiveCommand?: InteractiveCommandRunner
@@ -44,11 +45,12 @@ export async function installSystemImage(
   sdkRoot: string,
   {
     pathExists = defaultPathExists(),
+    platform,
     readDirectory,
     runInteractiveCommand = runInteractiveExecutable,
   }: SystemImagePackageManagerDependencies = {},
 ): Promise<void> {
-  const packageManager = await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, readDirectory })
+  const packageManager = await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, platform, readDirectory })
   const packageName =
     packageManager.type === 'android' ? systemImagePackageToRelativeDirectory(systemImage) : systemImage
   const args = packageManager.type === 'android' ? ['sdk', 'install', packageName] : ['--install', packageName]
@@ -60,11 +62,12 @@ export async function listAvailableSystemImages(
   sdkRoot: string,
   {
     pathExists = defaultPathExists(),
+    platform,
     readDirectory,
     runCommand = runExecutable,
   }: SystemImagePackageManagerDependencies = {},
 ): Promise<string[]> {
-  const packageManager = await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, readDirectory })
+  const packageManager = await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, platform, readDirectory })
   const command: [string, ...string[]] =
     packageManager.type === 'android'
       ? [packageManager.executable, 'sdk', 'list', '--all', GOOGLE_PLAY_SYSTEM_IMAGES_PATTERN]
@@ -92,11 +95,12 @@ export async function uninstallSystemImages(
   sdkRoot: string,
   {
     pathExists = defaultPathExists(),
+    platform,
     readDirectory,
     runInteractiveCommand = runInteractiveExecutable,
   }: SystemImagePackageManagerDependencies = {},
 ): Promise<void> {
-  const packageManager = await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, readDirectory })
+  const packageManager = await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, platform, readDirectory })
   const packageNames =
     packageManager.type === 'android'
       ? systemImages.map((systemImage) => systemImagePackageToRelativeDirectory(systemImage))
@@ -139,7 +143,7 @@ function getAbiForArchitecture(architecture: string): string {
 
 async function resolveAndroidSdkPackageManager(
   sdkRoot: string,
-  dependencies: { pathExists: PathChecker; readDirectory?: DirectoryReader },
+  dependencies: { pathExists: PathChecker; platform?: NodeJS.Platform; readDirectory?: DirectoryReader },
 ): Promise<AndroidSdkPackageManager> {
   try {
     return {

@@ -1,25 +1,35 @@
 import { join } from 'node:path'
+import { executableFileNames } from '../../core/data-access/executable-lookup.ts'
 import type { DirectoryReader, PathChecker } from './emulator-types.ts'
 import { defaultReadDirectory } from './list-installed-avds.ts'
 
 interface ResolveAndroidCommandLineToolDependencies {
   pathExists: PathChecker
+  platform?: NodeJS.Platform
   readDirectory?: DirectoryReader
 }
 
+/** Finds a cmdline-tools binary such as `avdmanager`, preferring `latest` and, on Windows, its `.bat` launcher. */
 export async function resolveAndroidCommandLineTool(
   sdkRoot: string,
   tool: string,
-  { pathExists, readDirectory = defaultReadDirectory }: ResolveAndroidCommandLineToolDependencies,
+  {
+    pathExists,
+    platform = process.platform,
+    readDirectory = defaultReadDirectory,
+  }: ResolveAndroidCommandLineToolDependencies,
 ): Promise<string> {
   const commandLineToolsRoot = join(sdkRoot, 'cmdline-tools')
   const directories = await listDirectoryNames(commandLineToolsRoot, readDirectory)
+  const fileNames = executableFileNames(tool, platform)
 
   for (const directory of directories) {
-    const candidate = join(commandLineToolsRoot, directory, 'bin', tool)
+    for (const fileName of fileNames) {
+      const candidate = join(commandLineToolsRoot, directory, 'bin', fileName)
 
-    if (await pathExists(candidate)) {
-      return candidate
+      if (await pathExists(candidate)) {
+        return candidate
+      }
     }
   }
 

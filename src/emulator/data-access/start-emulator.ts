@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process'
-import { getToolPaths } from './avd-config.ts'
+import { resolveAndroidSdkRoot } from '../../core/data-access/android-sdk-root.ts'
+import { getEmulatorExecutablePath } from './avd-config.ts'
 import type { EmulatorStartCommandOptions, StartEmulatorDependencies } from './emulator-types.ts'
 import { listInstalledAvds } from './list-installed-avds.ts'
-import { resolveAndroidSdkRoot } from './resolve-android-sdk-root.ts'
 
 export async function defaultStartProcess(cmd: [string, ...string[]]) {
   await new Promise<void>((resolve, reject) => {
@@ -21,7 +21,13 @@ export async function defaultStartProcess(cmd: [string, ...string[]]) {
 
 export async function startEmulator(
   { name, sdkRoot = resolveAndroidSdkRoot() }: EmulatorStartCommandOptions,
-  { getHomeDirectory, readDirectory, readTextFile, startProcess = defaultStartProcess }: StartEmulatorDependencies = {},
+  {
+    getHomeDirectory,
+    platform = process.platform,
+    readDirectory,
+    readTextFile,
+    startProcess = defaultStartProcess,
+  }: StartEmulatorDependencies = {},
 ): Promise<void> {
   if (!name) {
     throw new Error('Emulator name is required.')
@@ -33,5 +39,5 @@ export async function startEmulator(
     throw new Error(`Unknown emulator: ${name}`)
   }
 
-  await startProcess([getToolPaths(sdkRoot).emulator, `@${name}`])
+  await startProcess([getEmulatorExecutablePath(sdkRoot, platform), `@${name}`])
 }

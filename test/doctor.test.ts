@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { join } from 'node:path'
 import { checkAdbVersion, parseAdbVersion } from '../src/doctor/data-access/check-adb-version.ts'
 import { checkAndroidDevices, parseAdbDevices } from '../src/doctor/data-access/check-android-devices.ts'
 import {
@@ -99,6 +100,17 @@ describe('Android SDK resolution', () => {
     const result = await resolveAndroidSdk(
       environment({ pathExists: async (path) => path === '/home/test/Android/Sdk' }),
     )
+    expect(result.source).toBe('default location')
+  })
+  test('uses LOCALAPPDATA on Windows', async () => {
+    const result = await resolveAndroidSdk(
+      environment({
+        environment: { LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local' },
+        getPlatform: () => 'win32',
+        pathExists: async () => true,
+      }),
+    )
+    expect(result.path).toBe(join('C:\\Users\\test\\AppData\\Local', 'Android', 'Sdk'))
     expect(result.source).toBe('default location')
   })
   test('reports missing SDK', async () => expect((await resolveAndroidSdk(environment())).path).toBeUndefined())

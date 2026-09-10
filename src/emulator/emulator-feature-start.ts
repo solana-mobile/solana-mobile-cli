@@ -35,6 +35,7 @@ export async function runEmulatorStart(
     log = clackLog.message,
     note: showNote = note,
     outro: showOutro = outro,
+    platform,
     pollIntervalMs,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
@@ -73,6 +74,7 @@ export async function runEmulatorStart(
       },
       {
         getHomeDirectory,
+        platform,
         readDirectory,
         readTextFile,
         startProcess,

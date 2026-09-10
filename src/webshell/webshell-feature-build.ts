@@ -69,19 +69,11 @@ export async function runWebshellBuild(
         : undefined
     const keystoreAlias = options.keystoreAlias?.trim() || config.keystoreAlias
 
-    // gradlew.bat is not an executable — Windows can only run it through cmd.exe, and cmd.exe parses
-    // the command text itself, so page- or manifest-controlled values must carry no metacharacters.
-    if (platform === 'win32') {
-      for (const [name, value] of Object.entries({ keystoreAlias, keystorePath, projectDirectory })) {
-        if (value && /[&|<>^"%\r\n]/.test(value)) {
-          throw new Error(`The ${name} contains characters cmd.exe would interpret: ${value}`)
-        }
-      }
-    }
-    const command: [string, ...string[]] =
-      platform === 'win32'
-        ? ['cmd.exe', '/c', join(projectDirectory, 'gradlew.bat'), 'assembleRelease']
-        : [join(projectDirectory, 'gradlew'), 'assembleRelease']
+    // The command runner routes gradlew.bat through cmd.exe and rejects values it would misparse.
+    const command: [string, ...string[]] = [
+      join(projectDirectory, platform === 'win32' ? 'gradlew.bat' : 'gradlew'),
+      'assembleRelease',
+    ]
     const childEnv: Record<string, string> = {}
     const signed = Boolean(keystorePath && keystoreAlias)
 

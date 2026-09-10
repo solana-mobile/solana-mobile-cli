@@ -2,10 +2,11 @@ import { constants } from 'node:fs'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { resolveAndroidSdkRoot } from '../../core/data-access/android-sdk-root.ts'
 import { runExecutable } from '../../core/data-access/run-executable.ts'
 import {
   createAvdConfigValues,
-  getToolPaths,
+  getEmulatorExecutablePath,
   parseAvdConfig,
   parseSystemImagePackage,
   resolveCreateOptions,
@@ -20,13 +21,13 @@ import type {
 } from './emulator-types.ts'
 import { listInstalledSystemImages, resolveInstalledSystemImage } from './list-installed-system-images.ts'
 import { resolveAndroidCommandLineTool } from './resolve-android-command-line-tool.ts'
-import { resolveAndroidSdkRoot } from './resolve-android-sdk-root.ts'
 
 export async function createAvd(
   options: EmulatorCreateCommandOptions,
   {
     getHomeDirectory = homedir,
     pathExists = defaultPathExists(),
+    platform = process.platform,
     readDirectory,
     readTextFile = defaultReadTextFile,
     runCommand = runExecutable,
@@ -36,7 +37,7 @@ export async function createAvd(
   const profile = resolveEmulatorProfile(options.profile)
   const name = options.name ?? profile.name
   const sdkRoot = options.sdkRoot ?? resolveAndroidSdkRoot()
-  const { emulator } = getToolPaths(sdkRoot)
+  const emulator = getEmulatorExecutablePath(sdkRoot, platform)
   const homeDirectory = getHomeDirectory()
   const avdDirectory = getAvdDirectoryPath(homeDirectory, name)
 
@@ -55,6 +56,7 @@ export async function createAvd(
   const resolvedOptions = resolveCreateOptions({ ...options, name, sdkRoot }, systemImage)
   const avdmanager = await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', {
     pathExists,
+    platform,
     readDirectory,
   })
   const { abi } = parseSystemImagePackage(resolvedOptions.systemImage)

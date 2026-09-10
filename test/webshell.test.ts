@@ -1203,32 +1203,19 @@ describe('runWebshellBuild', () => {
     expect(process.exitCode).toBe(previousExitCode)
   })
 
-  test('invokes gradlew.bat through cmd.exe on Windows', async () => {
+  // The cmd.exe wrapping and its metacharacter guard live in the shared command runner, covered in core.test.ts.
+  test('invokes gradlew.bat on Windows', async () => {
     const { dependencies, state } = buildDependencies({ platform: 'win32' })
 
     await runWebshellBuild({ directory: '/tmp/webshell-app' }, dependencies)
 
     expect(state.cancelled).toBeUndefined()
     expect(state.calls[0]?.cmd).toEqual([
-      'cmd.exe',
-      '/c',
       '/tmp/webshell-app/gradlew.bat',
       'assembleRelease',
       '-PSOLANA_MOBILE_KEYSTORE_PATH=/tmp/webshell-app/release.keystore',
       '-PSOLANA_MOBILE_KEYSTORE_ALIAS=release',
     ])
-  })
-
-  test('rejects cmd.exe metacharacters in signing values on Windows', async () => {
-    const previousExitCode = process.exitCode
-    const { dependencies, state } = buildDependencies({ platform: 'win32' })
-
-    await runWebshellBuild({ directory: '/tmp/webshell-app', keystorePath: 'evil&calc.keystore' }, dependencies)
-
-    expect(state.cancelled).toContain('cmd.exe')
-    expect(state.calls).toHaveLength(0)
-    expect(process.exitCode).toBe(1)
-    process.exitCode = previousExitCode
   })
 
   test('errors clearly when the directory is not a webshell project', async () => {

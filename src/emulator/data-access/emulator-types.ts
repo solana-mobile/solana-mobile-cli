@@ -67,6 +67,7 @@ export interface EmulatorTuneCommandOptions {
 export interface CreateAvdDependencies {
   getHomeDirectory?: HomeDirectoryResolver
   pathExists?: PathChecker
+  platform?: NodeJS.Platform
   readDirectory?: DirectoryReader
   readTextFile?: FileReader
   runCommand?: CommandRunner
@@ -84,6 +85,8 @@ export interface CreateAvdResult {
 export interface DeleteInstalledAvdsDependencies {
   getHomeDirectory?: HomeDirectoryResolver
   pathExists?: PathChecker
+  platform?: NodeJS.Platform
+  readDirectory?: DirectoryReader
   runCommand?: CommandRunner
 }
 
@@ -164,6 +167,7 @@ export interface RunningEmulator {
 }
 
 export interface StartEmulatorDependencies extends ListInstalledAvdsDependencies {
+  platform?: NodeJS.Platform
   startProcess?: ProcessStarter
 }
 

@@ -36,6 +36,7 @@ export async function runEmulatorDelete(
     note: showNote = note,
     outro: showOutro = outro,
     pathExists = defaultPathExists(),
+    platform,
     readDirectory = defaultReadDirectory,
     readTextFile = defaultReadTextFile,
     runCommand = runExecutable,
@@ -93,6 +94,8 @@ export async function runEmulatorDelete(
             const result = await deleteInstalledAvds([name], options.sdkRoot, {
               getHomeDirectory,
               pathExists,
+              platform,
+              readDirectory,
               runCommand,
             })
 

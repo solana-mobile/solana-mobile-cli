@@ -1,11 +1,15 @@
 import { describe, expect, spyOn, test } from 'bun:test'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { tasks } from '@clack/prompts'
 import { createApp } from '../src/app.ts'
 import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
-import { createAvdConfigValues, parseAvdConfig } from '../src/emulator/data-access/avd-config.ts'
+import {
+  createAvdConfigValues,
+  getEmulatorExecutablePath,
+  parseAvdConfig,
+} from '../src/emulator/data-access/avd-config.ts'
 import { createAvd } from '../src/emulator/data-access/create-avd.ts'
 import { deleteInstalledAvds } from '../src/emulator/data-access/delete-installed-avds.ts'
 import type {
@@ -20,13 +24,13 @@ import type {
   EmulatorTuneCommandOptions,
 } from '../src/emulator/data-access/emulator-types.ts'
 import { listEmulatorStatuses } from '../src/emulator/data-access/list-emulator-statuses.ts'
-import { listInstalledAvds } from '../src/emulator/data-access/list-installed-avds.ts'
+import { defaultReadDirectory, listInstalledAvds } from '../src/emulator/data-access/list-installed-avds.ts'
 import {
   listInstalledSystemImages,
   selectDefaultSystemImage,
 } from '../src/emulator/data-access/list-installed-system-images.ts'
 import { listRunningEmulators } from '../src/emulator/data-access/list-running-emulators.ts'
-import { resolveAndroidSdkRoot } from '../src/emulator/data-access/resolve-android-sdk-root.ts'
+import { resolveAndroidCommandLineTool } from '../src/emulator/data-access/resolve-android-command-line-tool.ts'
 import { startEmulator } from '../src/emulator/data-access/start-emulator.ts'
 import { stopEmulator } from '../src/emulator/data-access/stop-emulator.ts'
 import {
@@ -86,6 +90,13 @@ async function installAndroidCommandLineTool(sdkRoot: string, tool: string, vers
   const toolDirectory = join(sdkRoot, 'cmdline-tools', version, 'bin')
   await mkdir(toolDirectory, { recursive: true })
   await writeFile(join(toolDirectory, tool), '')
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  return access(filePath).then(
+    () => true,
+    () => false,
+  )
 }
 
 async function installAndroidPlatform(sdkRoot: string, androidPlatform: string) {
@@ -159,12 +170,50 @@ describe('emulator', () => {
     })
   })
 
-  test('resolves Android SDK root from environment and home directory', () => {
-    expect(resolveAndroidSdkRoot({ ANDROID_HOME: '/home-sdk', ANDROID_SDK_ROOT: '/root-sdk' }, '/Users/test')).toBe(
-      '/root-sdk',
-    )
-    expect(resolveAndroidSdkRoot({ ANDROID_HOME: '/home-sdk' }, '/Users/test')).toBe('/home-sdk')
-    expect(resolveAndroidSdkRoot({}, '/Users/test')).toBe('/Users/test/Library/Android/sdk')
+  test('resolves command-line tools from the newest cmdline-tools directory, preferring latest', async () => {
+    const sdkRoot = await createTemporaryDirectory('solana-mobile-cmdline-tools-')
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager', '19.0')
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager', '20.0')
+
+      expect(await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists })).toBe(
+        join(sdkRoot, 'cmdline-tools', '20.0', 'bin', 'avdmanager'),
+      )
+
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager')
+
+      expect(await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists })).toBe(
+        join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager'),
+      )
+    } finally {
+      await rm(sdkRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('resolves the .bat launcher on Windows and ignores the extensionless shell script', async () => {
+    const sdkRoot = await createTemporaryDirectory('solana-mobile-cmdline-tools-windows-')
+
+    try {
+      // The SDK ships both files side by side; only the .bat is runnable on Windows.
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager')
+      await expect(
+        resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists, platform: 'win32' }),
+      ).rejects.toThrow('avdmanager not found under')
+
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager.bat')
+
+      expect(
+        await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists, platform: 'win32' }),
+      ).toBe(join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager.bat'))
+    } finally {
+      await rm(sdkRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('points at emulator.exe on Windows', () => {
+    expect(getEmulatorExecutablePath('/sdk', 'darwin')).toBe(join('/sdk', 'emulator', 'emulator'))
+    expect(getEmulatorExecutablePath('/sdk', 'win32')).toBe(join('/sdk', 'emulator', 'emulator.exe'))
   })
 
   test('lists installed system image packages alphabetically', async () => {
@@ -1034,6 +1083,38 @@ Available packages:
     }
   })
 
+  test('creates an emulator through avdmanager.bat on Windows', async () => {
+    const rootDirectory = await createTemporaryDirectory('solana-mobile-avd-create-windows-')
+    const homeDirectory = join(rootDirectory, 'home')
+    const sdkRoot = join(rootDirectory, 'sdk')
+    const systemImage = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    const commands: Array<[string, ...string[]]> = []
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager')
+      await installAndroidCommandLineTool(sdkRoot, 'avdmanager.bat')
+      await installSystemImage(sdkRoot, systemImage)
+
+      const result = await createAvd(
+        { name: 'test_phone', sdkRoot },
+        {
+          getHomeDirectory: () => homeDirectory,
+          platform: 'win32',
+          runCommand: async (cmd) => {
+            commands.push(cmd)
+            await mkdir(join(homeDirectory, '.android', 'avd', 'test_phone.avd'), { recursive: true })
+            return ''
+          },
+        },
+      )
+
+      expect(commands[0]?.[0]).toBe(join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager.bat'))
+      expect(result.emulatorPath).toBe(join(sdkRoot, 'emulator', 'emulator.exe'))
+    } finally {
+      await rm(rootDirectory, { force: true, recursive: true })
+    }
+  })
+
   test('skips creating when the emulator already exists', async () => {
     const rootDirectory = await createTemporaryDirectory('solana-mobile-avd-create-existing-')
     const homeDirectory = join(rootDirectory, 'home')
@@ -1469,6 +1550,7 @@ Available packages:
     const result = await deleteInstalledAvds(['Alpha', 'Beta'], '/sdk', {
       getHomeDirectory: () => '/home',
       pathExists: async () => true,
+      readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
       runCommand: async (cmd) => {
         commands.push(cmd)
         return ''
@@ -1482,12 +1564,48 @@ Available packages:
     expect(result).toEqual({ deleted: ['Alpha', 'Beta'], failures: [], notInstalled: [] })
   })
 
+  test('deletes installed emulators through avdmanager.bat on Windows', async () => {
+    const commands: Array<[string, ...string[]]> = []
+
+    const result = await deleteInstalledAvds(['Alpha'], 'C:\\sdk', {
+      getHomeDirectory: () => 'C:\\home',
+      pathExists: async () => true,
+      platform: 'win32',
+      readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
+      runCommand: async (cmd) => {
+        commands.push(cmd)
+        return ''
+      },
+    })
+
+    expect(commands).toEqual([
+      [join('C:\\sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager.exe'), 'delete', 'avd', '--name', 'Alpha'],
+    ])
+    expect(result).toEqual({ deleted: ['Alpha'], failures: [], notInstalled: [] })
+  })
+
+  test('does not look for avdmanager when nothing is installed', async () => {
+    const result = await deleteInstalledAvds(['Ghost'], '/sdk', {
+      getHomeDirectory: () => '/home',
+      pathExists: async () => false,
+      readDirectory: async () => {
+        throw new Error('Unexpected cmdline-tools lookup.')
+      },
+      runCommand: async () => {
+        throw new Error('Unexpected avdmanager call.')
+      },
+    })
+
+    expect(result).toEqual({ deleted: [], failures: [], notInstalled: ['Ghost'] })
+  })
+
   test('reports emulators with nothing on disk as not installed without calling avdmanager', async () => {
     const commands: Array<[string, ...string[]]> = []
 
     const result = await deleteInstalledAvds(['Alpha', 'Ghost'], '/sdk', {
       getHomeDirectory: () => '/home',
-      pathExists: async (filePath) => filePath.includes('Alpha'),
+      pathExists: async (filePath) => filePath.includes('Alpha') || filePath.endsWith('avdmanager'),
+      readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
       runCommand: async (cmd) => {
         commands.push(cmd)
         return ''
@@ -1503,7 +1621,8 @@ Available packages:
 
     const result = await deleteInstalledAvds(['Alpha'], '/sdk', {
       getHomeDirectory: () => '/home',
-      pathExists: async (filePath) => filePath.endsWith('Alpha.ini'),
+      pathExists: async (filePath) => filePath.endsWith('Alpha.ini') || filePath.endsWith('avdmanager'),
+      readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
       runCommand: async (cmd) => {
         commands.push(cmd)
         return ''
@@ -1518,6 +1637,7 @@ Available packages:
     const result = await deleteInstalledAvds(['Alpha', 'Beta'], '/sdk', {
       getHomeDirectory: () => '/home',
       pathExists: async () => true,
+      readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
       runCommand: async (cmd) => {
         if (cmd.includes('Beta')) {
           throw new Error('avdmanager exploded')
@@ -1589,6 +1709,7 @@ Available packages:
           cancel: (message) => cancellations.push(message),
           getHomeDirectory: () => '/home',
           pathExists: async () => true,
+          readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
           runCommand: async (cmd) => {
             if (cmd.join(' ') === 'adb devices') {
               return 'List of devices attached\n'
@@ -1667,6 +1788,11 @@ Available packages:
         },
         {
           getHomeDirectory: () => homeDirectory,
+          pathExists: async () => true,
+          readDirectory: async (directoryPath) =>
+            directoryPath === join('/sdk', 'cmdline-tools')
+              ? [{ isDirectory: () => true, name: 'latest' }]
+              : defaultReadDirectory(directoryPath),
           runCommand: async (cmd) => {
             commands.push(cmd)
             return ''
@@ -1857,6 +1983,19 @@ Available packages:
       )
 
       expect(startedCommands).toEqual([['/sdk/emulator/emulator', '@Alpha']])
+
+      await startEmulator(
+        { name: 'Alpha', sdkRoot: 'C:\\sdk' },
+        {
+          getHomeDirectory: () => homeDirectory,
+          platform: 'win32',
+          startProcess: async (cmd) => {
+            startedCommands.push(cmd)
+          },
+        },
+      )
+
+      expect(startedCommands[1]).toEqual([join('C:\\sdk', 'emulator', 'emulator.exe'), '@Alpha'])
     } finally {
       await rm(homeDirectory, { force: true, recursive: true })
     }

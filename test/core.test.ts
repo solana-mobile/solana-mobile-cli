@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { createApp, runApp } from '../src/app.ts'
+import {
+  defaultAndroidSdkRoot,
+  listAndroidSdkRootCandidates,
+  resolveAndroidSdkRoot,
+} from '../src/core/data-access/android-sdk-root.ts'
+import { executableFileNames, findExecutable } from '../src/core/data-access/executable-lookup.ts'
 import { readPackageMetadata } from '../src/core/data-access/package-metadata.ts'
+import { resolveSpawnCommand } from '../src/core/data-access/run-executable.ts'
 import { checkForNewerVersion, isVersionGreater } from '../src/core/data-access/version-check.ts'
 import { formatUpdateWarning } from '../src/core/ui/core-ui-update-warning.ts'
 import { formatCliCommand } from '../src/core/util/format-cli-command.ts'
@@ -90,6 +98,108 @@ describe('core', () => {
 
   test('requires package metadata strings', () => {
     expect(() => readPackageString({ name: 123 }, 'name')).toThrow('package.json name must be a string')
+  })
+})
+
+describe('android sdk root', () => {
+  test('prefers ANDROID_HOME over the deprecated ANDROID_SDK_ROOT', () => {
+    const options = { environment: { ANDROID_HOME: '/home-sdk', ANDROID_SDK_ROOT: '/root-sdk' }, homeDirectory: '/u' }
+
+    expect(resolveAndroidSdkRoot({ ...options, platform: 'linux' })).toBe('/home-sdk')
+    expect(listAndroidSdkRootCandidates({ ...options, platform: 'linux' })).toEqual([
+      { path: '/home-sdk', source: 'ANDROID_HOME' },
+      { path: '/root-sdk', source: 'ANDROID_SDK_ROOT' },
+      { path: join('/u', 'Android', 'Sdk'), source: 'default location' },
+    ])
+    expect(resolveAndroidSdkRoot({ environment: { ANDROID_SDK_ROOT: '/root-sdk' }, platform: 'linux' })).toBe(
+      '/root-sdk',
+    )
+  })
+
+  test('falls back to the Android Studio default for each platform', () => {
+    expect(defaultAndroidSdkRoot({ environment: {}, homeDirectory: '/Users/test', platform: 'darwin' })).toBe(
+      join('/Users/test', 'Library', 'Android', 'sdk'),
+    )
+    expect(defaultAndroidSdkRoot({ environment: {}, homeDirectory: '/home/test', platform: 'linux' })).toBe(
+      join('/home/test', 'Android', 'Sdk'),
+    )
+    expect(
+      defaultAndroidSdkRoot({
+        environment: { LOCALAPPDATA: 'C:\\Users\\test\\AppData\\Local' },
+        homeDirectory: 'C:\\Users\\test',
+        platform: 'win32',
+      }),
+    ).toBe(join('C:\\Users\\test\\AppData\\Local', 'Android', 'Sdk'))
+    expect(defaultAndroidSdkRoot({ environment: {}, homeDirectory: 'C:\\Users\\test', platform: 'win32' })).toBe(
+      join('C:\\Users\\test', 'AppData', 'Local', 'Android', 'Sdk'),
+    )
+  })
+})
+
+describe('executable lookup', () => {
+  test('only accepts Windows executable extensions on win32', () => {
+    expect(executableFileNames('adb', 'darwin')).toEqual(['adb'])
+    expect(executableFileNames('adb', 'win32')).toEqual(['adb.exe', 'adb.bat', 'adb.cmd'])
+  })
+
+  test('searches preferred directories before PATH', async () => {
+    const existing = new Set([join('/usr/bin', 'adb'), join('/sdk/platform-tools', 'adb')])
+    const pathExists = async (filePath: string) => existing.has(filePath)
+    const environment = { PATH: ['/usr/bin', '/opt/bin'].join(delimiter) }
+
+    expect(await findExecutable('adb', { environment, pathExists, platform: 'linux' })).toBe(join('/usr/bin', 'adb'))
+    expect(
+      await findExecutable('adb', {
+        environment,
+        pathExists,
+        platform: 'linux',
+        preferredDirectories: ['/sdk/platform-tools'],
+      }),
+    ).toBe(join('/sdk/platform-tools', 'adb'))
+    expect(await findExecutable('missing', { environment, pathExists, platform: 'linux' })).toBeUndefined()
+  })
+
+  test('skips the extensionless shell script on Windows', async () => {
+    const existing = new Set([join('C:\\tools\\bin', 'avdmanager'), join('C:\\tools\\bin', 'avdmanager.bat')])
+
+    expect(
+      await findExecutable('avdmanager', {
+        environment: {},
+        pathExists: async (filePath) => existing.has(filePath),
+        platform: 'win32',
+        preferredDirectories: ['C:\\tools\\bin'],
+      }),
+    ).toBe(join('C:\\tools\\bin', 'avdmanager.bat'))
+  })
+})
+
+describe('spawn command', () => {
+  test('leaves commands alone outside Windows and for real executables', () => {
+    expect(resolveSpawnCommand(['/sdk/bin/avdmanager', 'list'], 'darwin')).toEqual(['/sdk/bin/avdmanager', 'list'])
+    expect(resolveSpawnCommand(['C:\\sdk\\emulator\\emulator.exe', '@Alpha'], 'win32')).toEqual([
+      'C:\\sdk\\emulator\\emulator.exe',
+      '@Alpha',
+    ])
+    expect(resolveSpawnCommand(['adb', 'devices'], 'win32')).toEqual(['adb', 'devices'])
+  })
+
+  test('runs batch files through cmd.exe on Windows', () => {
+    expect(resolveSpawnCommand(['C:\\sdk\\bin\\avdmanager.bat', 'list', 'avd'], 'win32')).toEqual([
+      'cmd.exe',
+      '/c',
+      'C:\\sdk\\bin\\avdmanager.bat',
+      'list',
+      'avd',
+    ])
+    expect(resolveSpawnCommand(['C:\\app\\gradlew.BAT', 'assembleRelease'], 'win32')[0]).toBe('cmd.exe')
+    expect(resolveSpawnCommand(['C:\\tools\\npm.cmd', '--version'], 'win32')[0]).toBe('cmd.exe')
+  })
+
+  test('refuses cmd.exe metacharacters in batch file arguments', () => {
+    expect(() => resolveSpawnCommand(['C:\\app\\gradlew.bat', '-Pkeystore=evil&calc.keystore'], 'win32')).toThrow(
+      'contains characters cmd.exe would interpret',
+    )
+    expect(() => resolveSpawnCommand(['C:\\my app\\gradlew.bat', 'assembleRelease'], 'win32')).not.toThrow()
   })
 })
 

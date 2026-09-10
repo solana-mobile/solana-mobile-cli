@@ -1,23 +1,16 @@
 import { join } from 'node:path'
+import { listAndroidSdkRootCandidates } from '../../core/data-access/android-sdk-root.ts'
 import type { DoctorCheckResult } from './doctor-check-result.ts'
 import { type DoctorEnvironment, findExecutable, parseVersion, sortVersions } from './doctor-environment.ts'
 
 export type AndroidSdkResolution = { conflict?: string; path?: string; searched: string[]; source?: string }
 
 export async function resolveAndroidSdk(environment: DoctorEnvironment): Promise<AndroidSdkResolution> {
-  const home = environment.getHomeDirectory()
-  const defaults: Partial<Record<NodeJS.Platform, string>> = {
-    darwin: join(home, 'Library', 'Android', 'sdk'),
-    linux: join(home, 'Android', 'Sdk'),
-    win32: environment.environment.LOCALAPPDATA
-      ? join(environment.environment.LOCALAPPDATA, 'Android', 'Sdk')
-      : undefined,
-  }
-  const candidates = [
-    { path: environment.environment.ANDROID_HOME, source: 'ANDROID_HOME' },
-    { path: environment.environment.ANDROID_SDK_ROOT, source: 'ANDROID_SDK_ROOT' },
-    { path: defaults[environment.getPlatform()], source: 'default location' },
-  ].filter((value): value is { path: string; source: string } => Boolean(value.path))
+  const candidates = listAndroidSdkRootCandidates({
+    environment: environment.environment,
+    homeDirectory: environment.getHomeDirectory(),
+    platform: environment.getPlatform(),
+  })
   const homeValue = environment.environment.ANDROID_HOME
   const rootValue = environment.environment.ANDROID_SDK_ROOT
   const conflict =
