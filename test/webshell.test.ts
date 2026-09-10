@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createApp } from '../src/app.ts'
 import type { CommandRunner, InteractiveRunCommandOptions } from '../src/core/data-access/command-types.ts'
@@ -322,7 +322,9 @@ describe('copyWebshellTemplate', () => {
       // npm also strips nested .gitignore files from tarballs, so this one is recreated, not copied.
       expect(await readFile(join(projectDirectory, 'app', '.gitignore'), 'utf8')).toBe('/build\n')
 
-      expect((await stat(join(projectDirectory, 'gradlew'))).mode & 0o111).not.toBe(0)
+      if (process.platform !== 'win32') {
+        expect((await stat(join(projectDirectory, 'gradlew'))).mode & 0o111).not.toBe(0)
+      }
     })
   })
 
@@ -392,7 +394,9 @@ describe('renameAndroidPackage', () => {
       expect(readme).toContain('com.example.myapp')
       expect(readme).toContain('solana-mobile webshell build .')
 
-      expect((await stat(join(projectDirectory, 'gradlew'))).mode & 0o111).not.toBe(0)
+      if (process.platform !== 'win32') {
+        expect((await stat(join(projectDirectory, 'gradlew'))).mode & 0o111).not.toBe(0)
+      }
     })
   })
 
@@ -845,6 +849,10 @@ describe('runWebshellInit', () => {
     throw new Error('text prompt should not be called')
   }
 
+  // The feature resolves every path, so expectations use the resolved forms (drive-letter paths on Windows).
+  const smokeDirectory = resolve('/tmp/webshell-smoke')
+  const trepaDirectory = resolve('/tmp/webshell-trepa')
+
   const completeInitOptions = {
     applicationId: 'com.example.smoke',
     appName: 'Smoke',
@@ -916,7 +924,7 @@ describe('runWebshellInit', () => {
 
     expect(state.cancelled).toBeUndefined()
     expect(state.copies).toEqual([
-      { force: undefined, targetDirectory: '/tmp/webshell-smoke', templateDirectory: '/fake/template' },
+      { force: undefined, targetDirectory: smokeDirectory, templateDirectory: '/fake/template' },
     ])
     expect(state.renames).toEqual([
       {
@@ -924,23 +932,23 @@ describe('runWebshellInit', () => {
           applicationId: 'com.example.smoke',
           appName: 'Smoke',
           keystoreAlias: 'smoke',
-          keystorePath: '/tmp/webshell-smoke/smoke.keystore',
+          keystorePath: join(smokeDirectory, 'smoke.keystore'),
           projectName: 'webshell-smoke',
           url: 'https://example.com/',
           versionCode: 7,
           versionName: '1.2.3',
         },
-        projectDirectory: '/tmp/webshell-smoke',
+        projectDirectory: smokeDirectory,
       },
     ])
-    expect(state.branding).toEqual([{ directory: '/tmp/webshell-smoke', manifest: undefined }])
+    expect(state.branding).toEqual([{ directory: smokeDirectory, manifest: undefined }])
     expect(state.keystores).toEqual([
       {
         appName: 'Smoke',
         keyPassword: 'key-secret',
         keystoreAlias: 'smoke',
         keystorePassword: 'store-secret',
-        keystorePath: '/tmp/webshell-smoke/smoke.keystore',
+        keystorePath: join(smokeDirectory, 'smoke.keystore'),
       },
     ])
     expect(state.configs).toEqual([
@@ -953,10 +961,10 @@ describe('runWebshellInit', () => {
           url: 'https://example.com/',
           webManifestUrl: undefined,
         },
-        projectDirectory: '/tmp/webshell-smoke',
+        projectDirectory: smokeDirectory,
       },
     ])
-    expect(state.outro).toContain('webshell build /tmp/webshell-smoke')
+    expect(state.outro).toContain(`webshell build ${smokeDirectory}`)
     expect(process.exitCode).toBe(previousExitCode)
   })
 
@@ -966,7 +974,7 @@ describe('runWebshellInit', () => {
     await runWebshellInit({ ...completeInitOptions, keystorePath: 'release.keystore' }, dependencies)
 
     expect(state.cancelled).toBeUndefined()
-    expect(state.keystores[0]).toMatchObject({ keystorePath: '/tmp/webshell-smoke/release.keystore' })
+    expect(state.keystores[0]).toMatchObject({ keystorePath: join(smokeDirectory, 'release.keystore') })
     expect(state.configs[0]?.config.keystorePath).toBe('release.keystore')
   })
 
@@ -1000,12 +1008,12 @@ describe('runWebshellInit', () => {
     expect(state.renames).toEqual([
       {
         options: expect.objectContaining({ appName: 'Trepa', url: 'https://trepa.app/start' }),
-        projectDirectory: '/tmp/webshell-trepa',
+        projectDirectory: trepaDirectory,
       },
     ])
     expect(state.branding).toEqual([
       {
-        directory: '/tmp/webshell-trepa',
+        directory: trepaDirectory,
         manifest: expect.objectContaining({ backgroundColor: '#abcdef', themeColor: '#123456' }),
       },
     ])
@@ -1148,6 +1156,9 @@ describe('runWebshellBuild', () => {
     options?: InteractiveRunCommandOptions
   }
 
+  // The feature resolves the project directory, so expectations use the resolved form.
+  const appDirectory = resolve('/tmp/webshell-app')
+
   function buildDependencies(overrides: RunWebshellBuildDependencies = {}) {
     const state = {
       calls: [] as InteractiveCall[],
@@ -1167,6 +1178,8 @@ describe('runWebshellBuild', () => {
       outro: (message) => {
         state.outro = message
       },
+      // Pinned so the gradlew name is deterministic; the Windows branch has its own test.
+      platform: 'linux',
       readProjectConfig: async () => ({ keystoreAlias: 'release', keystorePath: './release.keystore' }),
       resolvePasswords: async () => ({ keyPassword: 'key-secret', keystorePassword: 'store-secret' }),
       runInteractiveCommand: async (cmd, runOptions) => {
@@ -1188,18 +1201,18 @@ describe('runWebshellBuild', () => {
     expect(state.calls).toEqual([
       {
         cmd: [
-          '/tmp/webshell-app/gradlew',
+          join(appDirectory, 'gradlew'),
           'assembleRelease',
-          '-PSOLANA_MOBILE_KEYSTORE_PATH=/tmp/webshell-app/release.keystore',
+          `-PSOLANA_MOBILE_KEYSTORE_PATH=${join(appDirectory, 'release.keystore')}`,
           '-PSOLANA_MOBILE_KEYSTORE_ALIAS=release',
         ],
         options: {
-          cwd: '/tmp/webshell-app',
+          cwd: appDirectory,
           env: { SOLANA_MOBILE_KEY_PASSWORD: 'key-secret', SOLANA_MOBILE_KEYSTORE_PASSWORD: 'store-secret' },
         },
       },
     ])
-    expect(state.outro).toContain('/tmp/webshell-app/app/build/outputs/apk/release/app-release.apk')
+    expect(state.outro).toContain(join(appDirectory, 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk'))
     expect(process.exitCode).toBe(previousExitCode)
   })
 
@@ -1211,9 +1224,9 @@ describe('runWebshellBuild', () => {
 
     expect(state.cancelled).toBeUndefined()
     expect(state.calls[0]?.cmd).toEqual([
-      '/tmp/webshell-app/gradlew.bat',
+      join(appDirectory, 'gradlew.bat'),
       'assembleRelease',
-      '-PSOLANA_MOBILE_KEYSTORE_PATH=/tmp/webshell-app/release.keystore',
+      `-PSOLANA_MOBILE_KEYSTORE_PATH=${join(appDirectory, 'release.keystore')}`,
       '-PSOLANA_MOBILE_KEYSTORE_ALIAS=release',
     ])
   })
@@ -1239,7 +1252,7 @@ describe('runWebshellBuild', () => {
       dependencies,
     )
 
-    expect(state.calls[0]?.cmd).toContain('-PSOLANA_MOBILE_KEYSTORE_PATH=/keys/other.keystore')
+    expect(state.calls[0]?.cmd).toContain(`-PSOLANA_MOBILE_KEYSTORE_PATH=${resolve('/keys/other.keystore')}`)
     expect(state.calls[0]?.cmd).toContain('-PSOLANA_MOBILE_KEYSTORE_ALIAS=override')
   })
 
@@ -1263,7 +1276,7 @@ describe('runWebshellBuild', () => {
 
     expect(state.cancelled).toBeUndefined()
     expect(state.calls).toEqual([
-      { cmd: ['/tmp/webshell-app/gradlew', 'assembleRelease'], options: { cwd: '/tmp/webshell-app', env: {} } },
+      { cmd: [join(appDirectory, 'gradlew'), 'assembleRelease'], options: { cwd: appDirectory, env: {} } },
     ])
     expect(state.logs.join('\n')).toContain('unsigned')
     expect(state.outro).toContain('app-release-unsigned.apk')

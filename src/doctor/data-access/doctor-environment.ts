@@ -67,7 +67,8 @@ export function findExecutable(
 }
 
 export function expandHome(path: string, homeDirectory: string) {
-  return path === '~' ? homeDirectory : path.startsWith(`~${sep}`) ? join(homeDirectory, path.slice(2)) : path
+  if (path === '~') return homeDirectory
+  return path.startsWith('~/') || path.startsWith(`~${sep}`) ? join(homeDirectory, path.slice(2)) : path
 }
 
 export function parseVersion(output: string) {

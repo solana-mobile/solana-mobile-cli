@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { checkAdbVersion, parseAdbVersion } from '../src/doctor/data-access/check-adb-version.ts'
 import { checkAndroidDevices, parseAdbDevices } from '../src/doctor/data-access/check-android-devices.ts'
 import {
@@ -67,7 +67,7 @@ describe('checkAdbVersion', () => {
   test('passes adb 33 or higher', async () => {
     const result = await checkAdbVersion(
       environment({
-        pathExists: async (path) => path.endsWith('/adb'),
+        pathExists: async (path) => basename(path) === 'adb',
         runCommand: async (path) => ({ path, stderr: '', stdout: 'Version 33.0.3-8952118' }),
       }),
       '/sdk',
@@ -79,7 +79,7 @@ describe('checkAdbVersion', () => {
 
 describe('Android SDK resolution', () => {
   test('expands home-relative paths', () =>
-    expect(expandHome('~/Android/Sdk', '/home/test')).toBe('/home/test/Android/Sdk'))
+    expect(expandHome('~/Android/Sdk', '/home/test')).toBe(join('/home/test', 'Android', 'Sdk')))
   test('uses ANDROID_HOME before ANDROID_SDK_ROOT', async () => {
     const result = await resolveAndroidSdk(
       environment({
@@ -98,7 +98,7 @@ describe('Android SDK resolution', () => {
   })
   test('uses platform fallback location', async () => {
     const result = await resolveAndroidSdk(
-      environment({ pathExists: async (path) => path === '/home/test/Android/Sdk' }),
+      environment({ pathExists: async (path) => path === join('/home/test', 'Android', 'Sdk') }),
     )
     expect(result.source).toBe('default location')
   })
@@ -121,7 +121,7 @@ describe('package manager detection', () => {
     const result = await checkPackageManagers(
       environment({
         environment: { PATH: '/bin' },
-        pathExists: async (path) => path === '/bin/npm',
+        pathExists: async (path) => path === join('/bin', 'npm'),
         runCommand: async (path) => ({ path, stderr: '', stdout: '11.4.2' }),
       }),
     )
@@ -145,7 +145,7 @@ describe('adb devices parsing', () => {
     const checks = await checkAndroidDevices(
       environment({
         environment: { PATH: '/bin' },
-        pathExists: async (path) => path === '/bin/adb',
+        pathExists: async (path) => path === join('/bin', 'adb'),
         runCommand: async (path) => ({ path, stderr: '', stdout: 'List of devices attached\n' }),
       }),
       true,
@@ -159,7 +159,7 @@ describe('adb devices parsing', () => {
     const checks = await checkAndroidDevices(
       environment({
         environment: { npm_command: 'exec', npm_lifecycle_event: 'npx' },
-        pathExists: async (path) => path === '/bin/adb',
+        pathExists: async (path) => path === join('/bin', 'adb'),
         runCommand: async (path) => ({ path, stderr: '', stdout: 'List of devices attached\n' }),
       }),
       true,
@@ -174,7 +174,7 @@ describe('adb devices parsing', () => {
     const checks = await checkAndroidDevices(
       environment({
         environment: { PATH: '/bin' },
-        pathExists: async (path) => path === '/bin/adb',
+        pathExists: async (path) => path === join('/bin', 'adb'),
         runCommand: async (path) => ({ path, stderr: '', stdout: 'List of devices attached\nR5CX unauthorized\n' }),
       }),
       true,
@@ -189,7 +189,7 @@ describe('adb devices parsing', () => {
     let command = ''
     await checkAndroidDevices(
       environment({
-        pathExists: async (path) => path === '/sdk/platform-tools/adb',
+        pathExists: async (path) => path === join('/sdk', 'platform-tools', 'adb'),
         runCommand: async (path) => {
           command = path
           return { path, stderr: '', stdout: 'List of devices attached\n' }
@@ -199,7 +199,7 @@ describe('adb devices parsing', () => {
       '/sdk',
       [],
     )
-    expect(command).toBe('/sdk/platform-tools/adb')
+    expect(command).toBe(join('/sdk', 'platform-tools', 'adb'))
   })
 })
 

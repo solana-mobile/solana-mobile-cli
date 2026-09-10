@@ -20,8 +20,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  # Windows users hit paths the POSIX runners never exercise (#51), so build and test run on both.
+  # The matrix legs report as `build (<os>)`, so the plain `build` and `test` jobs below exist to
+  # keep the names the branch rules require.
+  build-matrix:
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -36,6 +44,7 @@ jobs:
         run: bun x publint
 
       - name: Publish to pkg.pr.new
+        if: matrix.os == 'ubuntu-latest'
         run: bun pkg-pr-new publish --packageManager=bun .
 
 
@@ -64,8 +73,13 @@ jobs:
       - name: Lint
         run: bun lint
 
-  test:
-    runs-on: ubuntu-latest
+  test-matrix:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -75,3 +89,19 @@ jobs:
 
       - name: Test
         run: bun run test
+
+  build:
+    needs: build-matrix
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every build leg to pass
+        run: test "${{ needs.build-matrix.result }}" = success
+
+  test:
+    needs: test-matrix
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every test leg to pass
+        run: test "${{ needs.test-matrix.result }}" = success

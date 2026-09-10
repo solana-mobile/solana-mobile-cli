@@ -492,8 +492,8 @@ describe('resolveApkArgs', () => {
 
   test('expands a directory to its .apk files, sorted', async () => {
     expect(await resolveApkArgs(['builds'], fakeFs)).toEqual([
-      { kind: 'local', path: 'builds/a.apk' },
-      { kind: 'local', path: 'builds/b.apk' },
+      { kind: 'local', path: join('builds', 'a.apk') },
+      { kind: 'local', path: join('builds', 'b.apk') },
     ])
   })
 
@@ -575,7 +575,7 @@ describe('ensureApkDownloaded', () => {
       type: 'github-release' as const,
     },
   }
-  const cachedPath = `/cache/fakewallet/${encodeURIComponent(FAKEWALLET_TAG)}/fakewallet-v1-release.apk`
+  const cachedPath = join('/cache', 'fakewallet', encodeURIComponent(FAKEWALLET_TAG), 'fakewallet-v1-release.apk')
 
   test('skips the download when the pinned asset is cached', async () => {
     const downloads: string[] = []
@@ -739,7 +739,7 @@ describe('runDeviceInstall', () => {
   test('downloads a catalog APK before installing it', async () => {
     const { calls, runCommand } = recordingRunner(singleDeviceWorld)
     const { dependencies, state } = installDependencies(runCommand)
-    const cachedPath = `/cache/fakewallet/${encodeURIComponent(FAKEWALLET_TAG)}/fakewallet-v1-release.apk`
+    const cachedPath = join('/cache', 'fakewallet', encodeURIComponent(FAKEWALLET_TAG), 'fakewallet-v1-release.apk')
 
     await runDeviceInstall({ apks: ['fakewallet'] }, dependencies)
 

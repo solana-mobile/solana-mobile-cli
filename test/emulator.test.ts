@@ -177,15 +177,15 @@ describe('emulator', () => {
       await installAndroidCommandLineTool(sdkRoot, 'avdmanager', '19.0')
       await installAndroidCommandLineTool(sdkRoot, 'avdmanager', '20.0')
 
-      expect(await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists })).toBe(
-        join(sdkRoot, 'cmdline-tools', '20.0', 'bin', 'avdmanager'),
-      )
+      expect(
+        await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists, platform: 'linux' }),
+      ).toBe(join(sdkRoot, 'cmdline-tools', '20.0', 'bin', 'avdmanager'))
 
       await installAndroidCommandLineTool(sdkRoot, 'avdmanager')
 
-      expect(await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists })).toBe(
-        join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager'),
-      )
+      expect(
+        await resolveAndroidCommandLineTool(sdkRoot, 'avdmanager', { pathExists: fileExists, platform: 'linux' }),
+      ).toBe(join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager'))
     } finally {
       await rm(sdkRoot, { force: true, recursive: true })
     }
@@ -408,6 +408,7 @@ describe('emulator', () => {
           getHomeDirectory: () => homeDirectory,
           intro: (message) => intros.push(message),
           log: (message) => logs.push(message),
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
             return ''
@@ -460,6 +461,7 @@ describe('emulator', () => {
           getHomeDirectory: () => homeDirectory,
           intro: () => {},
           log: () => {},
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
             return ''
@@ -593,6 +595,7 @@ describe('emulator', () => {
         {
           getHomeDirectory: () => homeDirectory,
           log: () => {},
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
             return ''
@@ -643,6 +646,7 @@ describe('emulator', () => {
         {
           getHomeDirectory: () => homeDirectory,
           log: () => {},
+          platform: 'linux',
           runCommand: async () => {
             throw new Error('Unexpected non-interactive uninstall.')
           },
@@ -739,6 +743,7 @@ Available Packages:
           architecture: 'arm64',
           intro: (message) => intros.push(message),
           log: (message) => logs.push(message),
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
 
@@ -820,6 +825,7 @@ Available packages:
           architecture: 'arm64',
           intro: () => {},
           log: () => {},
+          platform: 'linux',
           runCommand: async () => `
 Available packages:
   system-images/android-35/google_apis_playstore_ps16k/arm64-v8a  7.0.0  16 KB Page Size Google Play ARM 64 v8a System Image
@@ -899,6 +905,7 @@ Available packages:
           architecture: 'arm64',
           intro: () => {},
           log: (message) => logs.push(message),
+          platform: 'linux',
           runCommand: async () =>
             '  system-images/android-36.1/google_apis_playstore/arm64-v8a  4.0.0  Google Play ARM 64 v8a System Image\n',
           runInteractiveCommand: async () => {
@@ -935,6 +942,7 @@ Available packages:
         {
           architecture: 'arm64',
           log: () => {},
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
             return `  ${systemImage} | 9 | Google Play ARM 64 v8a System Image\n`
@@ -983,6 +991,7 @@ Available packages:
         {
           architecture: 'arm64',
           cancel: (message) => cancellations.push(message),
+          platform: 'linux',
           runCommand: async () =>
             `  system-images/android-35/google_apis_playstore/arm64-v8a  9.0.0  Google Play ARM 64 v8a System Image\n`,
           runInteractiveCommand: async () => {
@@ -1022,6 +1031,7 @@ Available packages:
         },
         {
           getHomeDirectory: () => homeDirectory,
+          platform: 'linux',
           runCommand: async (cmd, options = {}) => {
             commands.push({ cmd, stdin: options.stdin })
 
@@ -1136,6 +1146,7 @@ Available packages:
         },
         {
           getHomeDirectory: () => homeDirectory,
+          platform: 'linux',
           runCommand: async (cmd, options = {}) => {
             commands.push({ cmd, stdin: options.stdin })
             return ''
@@ -1179,6 +1190,7 @@ Available packages:
         {
           getHomeDirectory: () => homeDirectory,
           intro: (message) => intros.push(message),
+          platform: 'linux',
           runCommand: async (cmd, options = {}) => {
             commands.push({ cmd, stdin: options.stdin })
 
@@ -1254,6 +1266,7 @@ Available packages:
           getHomeDirectory: () => homeDirectory,
           intro: (message) => intros.push(message),
           log: () => {},
+          platform: 'linux',
           runCommand: async (cmd, options = {}) => {
             commands.push({ cmd, stdin: options.stdin })
 
@@ -1379,6 +1392,7 @@ Available packages:
           getHomeDirectory: () => homeDirectory,
           intro: () => {},
           log: () => {},
+          platform: 'linux',
           runCommand: async (cmd) => {
             if (cmd[0] === android) {
               return `  ${systemImage} | 7 | Google Play ARM 64 v8a System Image\n`
@@ -1439,6 +1453,7 @@ Available packages:
         },
         {
           getHomeDirectory: () => homeDirectory,
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
 
@@ -1489,6 +1504,7 @@ Available packages:
         {
           cancel: (message) => cancellations.push(message),
           getHomeDirectory: () => homeDirectory,
+          platform: 'linux',
           runCommand: async () => {
             throw new Error('No device found matching --device totally-not-a-real-device-profile.')
           },
@@ -1550,6 +1566,7 @@ Available packages:
     const result = await deleteInstalledAvds(['Alpha', 'Beta'], '/sdk', {
       getHomeDirectory: () => '/home',
       pathExists: async () => true,
+      platform: 'linux',
       readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
       runCommand: async (cmd) => {
         commands.push(cmd)
@@ -1558,8 +1575,8 @@ Available packages:
     })
 
     expect(commands).toEqual([
-      ['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Alpha'],
-      ['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Beta'],
+      [join('/sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager'), 'delete', 'avd', '--name', 'Alpha'],
+      [join('/sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager'), 'delete', 'avd', '--name', 'Beta'],
     ])
     expect(result).toEqual({ deleted: ['Alpha', 'Beta'], failures: [], notInstalled: [] })
   })
@@ -1605,6 +1622,7 @@ Available packages:
     const result = await deleteInstalledAvds(['Alpha', 'Ghost'], '/sdk', {
       getHomeDirectory: () => '/home',
       pathExists: async (filePath) => filePath.includes('Alpha') || filePath.endsWith('avdmanager'),
+      platform: 'linux',
       readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
       runCommand: async (cmd) => {
         commands.push(cmd)
@@ -1612,7 +1630,9 @@ Available packages:
       },
     })
 
-    expect(commands).toEqual([['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Alpha']])
+    expect(commands).toEqual([
+      [join('/sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager'), 'delete', 'avd', '--name', 'Alpha'],
+    ])
     expect(result).toEqual({ deleted: ['Alpha'], failures: [], notInstalled: ['Ghost'] })
   })
 
@@ -1622,6 +1642,7 @@ Available packages:
     const result = await deleteInstalledAvds(['Alpha'], '/sdk', {
       getHomeDirectory: () => '/home',
       pathExists: async (filePath) => filePath.endsWith('Alpha.ini') || filePath.endsWith('avdmanager'),
+      platform: 'linux',
       readDirectory: async () => [{ isDirectory: () => true, name: 'latest' }],
       runCommand: async (cmd) => {
         commands.push(cmd)
@@ -1629,7 +1650,9 @@ Available packages:
       },
     })
 
-    expect(commands).toEqual([['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Alpha']])
+    expect(commands).toEqual([
+      [join('/sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager'), 'delete', 'avd', '--name', 'Alpha'],
+    ])
     expect(result).toEqual({ deleted: ['Alpha'], failures: [], notInstalled: [] })
   })
 
@@ -1789,6 +1812,7 @@ Available packages:
         {
           getHomeDirectory: () => homeDirectory,
           pathExists: async () => true,
+          platform: 'linux',
           readDirectory: async (directoryPath) =>
             directoryPath === join('/sdk', 'cmdline-tools')
               ? [{ isDirectory: () => true, name: 'latest' }]
@@ -1813,7 +1837,7 @@ Available packages:
 
       expect(commands).toEqual([
         ['adb', 'devices'],
-        ['/sdk/cmdline-tools/latest/bin/avdmanager', 'delete', 'avd', '--name', 'Beta'],
+        [join('/sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager'), 'delete', 'avd', '--name', 'Beta'],
       ])
       expect(taskTitles).toEqual(['Deleting Beta'])
     } finally {
@@ -1976,13 +2000,14 @@ Available packages:
         { name: 'Alpha', sdkRoot: '/sdk' },
         {
           getHomeDirectory: () => homeDirectory,
+          platform: 'linux',
           startProcess: async (cmd) => {
             startedCommands.push(cmd)
           },
         },
       )
 
-      expect(startedCommands).toEqual([['/sdk/emulator/emulator', '@Alpha']])
+      expect(startedCommands).toEqual([[join('/sdk', 'emulator', 'emulator'), '@Alpha']])
 
       await startEmulator(
         { name: 'Alpha', sdkRoot: 'C:\\sdk' },
@@ -2017,6 +2042,7 @@ Available packages:
         { sdkRoot: '/sdk' },
         {
           getHomeDirectory: () => homeDirectory,
+          platform: 'linux',
           runCommand: async (cmd) => {
             throw new Error(`Unexpected command: ${cmd.join(' ')}`)
           },
@@ -2030,7 +2056,7 @@ Available packages:
         },
       )
 
-      expect(startedCommands).toEqual([['/sdk/emulator/emulator', '@Beta']])
+      expect(startedCommands).toEqual([[join('/sdk', 'emulator', 'emulator'), '@Beta']])
     } finally {
       await rm(homeDirectory, { force: true, recursive: true })
     }
@@ -2107,6 +2133,7 @@ Available packages:
         { name: 'Alpha', sdkRoot: '/sdk', tune: true },
         {
           getHomeDirectory: () => homeDirectory,
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
 
@@ -2138,7 +2165,7 @@ Available packages:
         },
       )
 
-      expect(startedCommands).toEqual([['/sdk/emulator/emulator', '@Alpha']])
+      expect(startedCommands).toEqual([[join('/sdk', 'emulator', 'emulator'), '@Alpha']])
       expect(commands).toEqual([
         ['adb', 'devices'],
         ['adb', '-s', 'emulator-5554', 'emu', 'avd', 'name'],
@@ -2169,6 +2196,7 @@ Available packages:
           note: (message, title) => {
             notes.push([message, title])
           },
+          platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
             return ''
@@ -2183,7 +2211,7 @@ Available packages:
         },
       )
 
-      expect(startedCommands).toEqual([['/sdk/emulator/emulator', '@Alpha']])
+      expect(startedCommands).toEqual([[join('/sdk', 'emulator', 'emulator'), '@Alpha']])
       expect(commands).toEqual([])
       expect(notes).toEqual([[formatCliCommand('emulator tune Alpha'), 'Apply agent-friendly tweaks']])
     } finally {
