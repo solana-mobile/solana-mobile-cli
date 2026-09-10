@@ -244,9 +244,10 @@ async function selectCustomTemplate(templates: TemplateJsonTemplate[]) {
 }
 
 // Mirrors the path forms create-solana-dapp's own `findTemplate` treats as local. A bare `foo/bar`
-// stays an external GitHub reference, so a local template always needs an explicit `./` or `/`.
+// stays an external GitHub reference, so a local template always needs an explicit `./` or an
+// absolute path (`/` or, on Windows, a drive letter).
 function isLocalTemplatePath(templateName: string): boolean {
-  return templateName.startsWith('/') || templateName.startsWith('./') || templateName.startsWith('../')
+  return isAbsolute(templateName) || /^\.\.?[\\/]/.test(templateName)
 }
 
 // create-solana-dapp copies `local:` templates from disk instead of downloading them. Without this

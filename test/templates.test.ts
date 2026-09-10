@@ -654,7 +654,7 @@ describe('templates sync', () => {
     const linkPath = join(target, 'mobile/example/env-link')
 
     expect(lstatSync(linkPath).isSymbolicLink()).toBe(true)
-    expect(readlinkSync(linkPath)).toBe('../../.env')
+    expect(readlinkSync(linkPath)).toBe(join('..', '..', '.env'))
     // The gitignored secret behind the link stays behind; the target only receives the (dangling) link.
     expect(existsSync(join(target, '.env'))).toBe(false)
 
@@ -663,32 +663,36 @@ describe('templates sync', () => {
     expect(plan.actions.map(({ action }) => action)).toEqual(['unchanged'])
   })
 
-  test('preserves the executable bit and treats a mode change as an update', async () => {
-    const source = createRepo({
-      'mobile/example/package.json': '{ "name": "example" }',
-      'mobile/example/script.sh': '#!/bin/sh\n',
-      'package.json': repositoryManifest,
-    })
-    chmodSync(join(source, 'mobile/example/script.sh'), 0o755)
-    const target = createRepo({
-      'mobile/example/package.json': '{ "name": "example" }',
-      'mobile/example/script.sh': '#!/bin/sh\n',
-      'package.json': repositoryManifest,
-    })
+  // NTFS has no executable bit, so a mode-only change is invisible on Windows.
+  test.skipIf(process.platform === 'win32')(
+    'preserves the executable bit and treats a mode change as an update',
+    async () => {
+      const source = createRepo({
+        'mobile/example/package.json': '{ "name": "example" }',
+        'mobile/example/script.sh': '#!/bin/sh\n',
+        'package.json': repositoryManifest,
+      })
+      chmodSync(join(source, 'mobile/example/script.sh'), 0o755)
+      const target = createRepo({
+        'mobile/example/package.json': '{ "name": "example" }',
+        'mobile/example/script.sh': '#!/bin/sh\n',
+        'package.json': repositoryManifest,
+      })
 
-    // Same bytes everywhere, but the target lost the executable bit.
-    const plan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
+      // Same bytes everywhere, but the target lost the executable bit.
+      const plan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
 
-    expect(plan.actions.map(({ action, path }) => `${action} ${path}`)).toEqual(['update mobile/example'])
+      expect(plan.actions.map(({ action, path }) => `${action} ${path}`)).toEqual(['update mobile/example'])
 
-    applyTemplateSync(source, target, plan)
+      applyTemplateSync(source, target, plan)
 
-    expect(lstatSync(join(target, 'mobile/example/script.sh')).mode & 0o111).toBe(0o111)
+      expect(lstatSync(join(target, 'mobile/example/script.sh')).mode & 0o111).toBe(0o111)
 
-    const replan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
+      const replan = await planTemplateSync(source, target, { listIgnoredFiles, listTrackedFiles })
 
-    expect(replan.actions.map(({ action }) => action)).toEqual(['unchanged'])
-  })
+      expect(replan.actions.map(({ action }) => action)).toEqual(['unchanged'])
+    },
+  )
 
   test('throws when the target does not declare the group', async () => {
     const source = createRepo({
