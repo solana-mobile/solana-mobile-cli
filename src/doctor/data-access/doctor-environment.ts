@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process'
 import { access, readdir, realpath, statfs } from 'node:fs/promises'
 import { homedir, platform, release } from 'node:os'
-import { delimiter, join, sep } from 'node:path'
+import { join, sep } from 'node:path'
+import { findExecutable as findExecutableOnPath } from '../../core/data-access/executable-lookup.ts'
 
 export type CommandResult = { path: string; stderr: string; stdout: string }
 export type CommandRunner = (command: string, args?: string[]) => Promise<CommandResult>
@@ -52,20 +53,17 @@ export function runExecutable(command: string, args: string[] = [], timeout = 5_
   })
 }
 
-export async function findExecutable(
+export function findExecutable(
   name: string,
   environment: DoctorEnvironment,
   preferredDirectories: string[] = [],
 ): Promise<string | undefined> {
-  const extensions = environment.getPlatform() === 'win32' ? ['', '.exe', '.bat', '.cmd'] : ['']
-  const pathDirectories = (environment.environment.PATH ?? '').split(delimiter).filter(Boolean)
-  for (const directory of [...preferredDirectories, ...pathDirectories]) {
-    for (const extension of extensions) {
-      const candidate = join(directory, `${name}${extension}`)
-      if (await environment.pathExists(candidate)) return candidate
-    }
-  }
-  return undefined
+  return findExecutableOnPath(name, {
+    environment: environment.environment,
+    pathExists: environment.pathExists,
+    platform: environment.getPlatform(),
+    preferredDirectories,
+  })
 }
 
 export function expandHome(path: string, homeDirectory: string) {

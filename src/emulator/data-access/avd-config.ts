@@ -1,6 +1,6 @@
 import { join } from 'node:path'
+import { resolveAndroidSdkRoot } from '../../core/data-access/android-sdk-root.ts'
 import type { EmulatorCreateCommandOptions, ParsedSystemImagePackage, ResolvedCreateOptions } from './emulator-types.ts'
-import { resolveAndroidSdkRoot } from './resolve-android-sdk-root.ts'
 
 export const DEFAULT_PROFILE_NAME = 'solana-mobile'
 
@@ -49,11 +49,8 @@ export function createAvdConfigValues(options: ResolvedCreateOptions): Record<st
   }
 }
 
-export function getToolPaths(sdkRoot: string) {
-  return {
-    avdmanager: join(sdkRoot, 'cmdline-tools', 'latest', 'bin', 'avdmanager'),
-    emulator: join(sdkRoot, 'emulator', 'emulator'),
-  }
+export function getEmulatorExecutablePath(sdkRoot: string, platform: NodeJS.Platform = process.platform): string {
+  return join(sdkRoot, 'emulator', platform === 'win32' ? 'emulator.exe' : 'emulator')
 }
 
 export function parseAvdConfig(contents: string): Record<string, string> {
