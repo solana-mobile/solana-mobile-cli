@@ -2,6 +2,8 @@ import { join } from 'node:path'
 import { resolveAndroidSdkRoot } from '../../core/data-access/android-sdk-root.ts'
 import type { EmulatorCreateCommandOptions, ParsedSystemImagePackage, ResolvedCreateOptions } from './emulator-types.ts'
 
+/** The API level offered first for new emulators; the newest image Google ships is not always one that boots. */
+export const DEFAULT_ANDROID_API_LEVEL = 36
 export const DEFAULT_PROFILE_NAME = 'solana-mobile'
 
 export const DEFAULT_PROFILE = {
@@ -75,6 +77,11 @@ export function parseAvdConfig(contents: string): Record<string, string> {
   }
 
   return Object.fromEntries(Object.entries(values).sort(([left], [right]) => left.localeCompare(right)))
+}
+
+/** Whether a platform such as `android-36` or `android-36.1` belongs to the default API level. */
+export function isDefaultAndroidApiLevel(platform: string): boolean {
+  return Number.parseInt(platform.slice('android-'.length), 10) === DEFAULT_ANDROID_API_LEVEL
 }
 
 export function parseSystemImagePackage(systemImage: string): ParsedSystemImagePackage {

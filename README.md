@@ -46,11 +46,8 @@ npx solana-mobile emulator images delete
 # Delete specific Android system images
 npx solana-mobile emulator images delete system-images/android-35/google_apis_playstore/arm64-v8a
 
-# Install an image for the latest installed Android platform
+# Install an Android system image, choosing from the available ones
 npx solana-mobile emulator images install
-
-# Install by choosing from all available system images
-npx solana-mobile emulator images install --all
 
 # Install a specific Android system image
 npx solana-mobile emulator images install system-images/android-36.1/google_apis_playstore/arm64-v8a

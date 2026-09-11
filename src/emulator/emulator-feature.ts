@@ -98,7 +98,6 @@ export function createEmulatorCommand({
   emulatorImagesCommand
     .command('install [systemImage]')
     .description('Install an Android system image')
-    .option('--all', 'Show all available system images')
     .option('--sdk-root <path>', 'Android SDK root')
     .option('-v, --verbose', 'Verbose output')
     .action(

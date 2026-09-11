@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises'
 import { join } from 'node:path'
-import { parseSystemImagePackage } from './avd-config.ts'
+import { isDefaultAndroidApiLevel, parseSystemImagePackage } from './avd-config.ts'
 import type { DirectoryReader, PathChecker } from './emulator-types.ts'
 import { defaultReadDirectory } from './list-installed-avds.ts'
 
@@ -71,32 +71,47 @@ export function resolveInstalledSystemImage(
   return requestedSystemImage
 }
 
+/** The default API level wins over the page-size preference, so a 16 KB image on it beats a newer standard one. */
 export function selectDefaultSystemImage(installedSystemImages: readonly string[]): string {
-  const standardSystemImages = installedSystemImages.filter(
-    (systemImage) => parseSystemImagePackage(systemImage).tagId === 'google_apis_playstore',
-  )
-  const sixteenKilobyteSystemImages = installedSystemImages.filter(
-    (systemImage) => parseSystemImagePackage(systemImage).tagId === 'google_apis_playstore_ps16k',
-  )
-  const googlePlaySystemImages = standardSystemImages.length > 0 ? standardSystemImages : sixteenKilobyteSystemImages
+  const googlePlaySystemImages = installedSystemImages.filter((systemImage) => {
+    const { tagId } = parseSystemImagePackage(systemImage)
+    return tagId === 'google_apis_playstore' || tagId === 'google_apis_playstore_ps16k'
+  })
 
   if (googlePlaySystemImages.length === 0) {
     throw new Error(`No supported Android system images found.\n${formatSystemImageHelp(installedSystemImages)}`)
   }
 
-  return sortSystemImagesNewestFirst(googlePlaySystemImages)[0] as string
+  const defaultPlatformSystemImages = googlePlaySystemImages.filter((systemImage) =>
+    isDefaultAndroidApiLevel(parseSystemImagePackage(systemImage).platform),
+  )
+  const standardSystemImages = googlePlaySystemImages.filter(
+    (systemImage) => parseSystemImagePackage(systemImage).tagId === 'google_apis_playstore',
+  )
+  const candidates =
+    defaultPlatformSystemImages.length > 0
+      ? defaultPlatformSystemImages
+      : standardSystemImages.length > 0
+        ? standardSystemImages
+        : googlePlaySystemImages
+
+  return sortSystemImagesDefaultFirst(candidates)[0] as string
 }
 
-export function sortSystemImagesNewestFirst(systemImages: readonly string[]): string[] {
-  return [...systemImages].sort(compareSystemImagesNewestFirst)
+export function sortSystemImagesDefaultFirst(systemImages: readonly string[]): string[] {
+  return [...systemImages].sort(compareSystemImagesDefaultFirst)
 }
 
-function compareSystemImagesNewestFirst(left: string, right: string): number {
+/** Images for the default API level first, then newest first. */
+function compareSystemImagesDefaultFirst(left: string, right: string): number {
   const leftPackage = parseSystemImagePackage(left)
   const rightPackage = parseSystemImagePackage(right)
+  const defaultComparison =
+    Number(isDefaultAndroidApiLevel(rightPackage.platform)) - Number(isDefaultAndroidApiLevel(leftPackage.platform))
   const platformComparison = rightPackage.platform.localeCompare(leftPackage.platform, 'en', { numeric: true })
 
   return (
+    defaultComparison ||
     platformComparison ||
     getSystemImageTagPriority(leftPackage.tagId) - getSystemImageTagPriority(rightPackage.tagId) ||
     left.localeCompare(right)
