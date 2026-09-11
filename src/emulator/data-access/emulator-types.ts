@@ -36,7 +36,6 @@ export interface EmulatorImagesDeleteCommandOptions {
 }
 
 export interface EmulatorImagesInstallCommandOptions {
-  all?: boolean
   sdkRoot?: string
   systemImage?: string
   verbose?: boolean

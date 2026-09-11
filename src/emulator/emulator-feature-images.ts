@@ -17,9 +17,7 @@ import { listInstalledAvds } from './data-access/list-installed-avds.ts'
 import { listInstalledSystemImages, resolveInstalledSystemImage } from './data-access/list-installed-system-images.ts'
 import {
   filterCompatibleSystemImages,
-  filterSystemImagesForPlatform,
   installSystemImage,
-  listInstalledAndroidPlatforms,
   normalizeSystemImagePackage,
   resolveAndroidSdkPackageManager,
   type SystemImagePackageManagerDependencies,
@@ -257,16 +255,6 @@ export async function installEmulatorSystemImage(
     return requestedSystemImage
   }
 
-  const latestAndroidPlatform =
-    requestedSystemImage || options.all
-      ? undefined
-      : (await listInstalledAndroidPlatforms(sdkRoot, { readDirectory }))[0]
-
-  if (!requestedSystemImage && !options.all && !latestAndroidPlatform) {
-    log('No Android SDK platforms are installed.')
-    return
-  }
-
   // Fail before the download and the prompt when nothing could install the chosen image.
   await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, platform, readDirectory })
 
@@ -311,20 +299,12 @@ export async function installEmulatorSystemImage(
     )
   }
 
-  const selectableSystemImages = latestAndroidPlatform
-    ? filterSystemImagesForPlatform(installableSystemImages, latestAndroidPlatform)
-    : installableSystemImages
-
-  if (selectableSystemImages.length === 0) {
-    log(
-      latestAndroidPlatform
-        ? `No system images are available to install for ${latestAndroidPlatform}.`
-        : `No system images are available to install on ${architecture}.`,
-    )
+  if (installableSystemImages.length === 0) {
+    log(`No system images are available to install on ${architecture}.`)
     return
   }
 
-  const systemImage = requestedSystemImage ?? (await selectSystemImage(selectableSystemImages, runSelect))
+  const systemImage = requestedSystemImage ?? (await selectSystemImage(installableSystemImages, runSelect))
 
   if (!systemImage) {
     return

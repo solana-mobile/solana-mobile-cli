@@ -33,11 +33,7 @@ import { listRunningEmulators } from '../src/emulator/data-access/list-running-e
 import { resolveAndroidCommandLineTool } from '../src/emulator/data-access/resolve-android-command-line-tool.ts'
 import { startEmulator } from '../src/emulator/data-access/start-emulator.ts'
 import { stopEmulator } from '../src/emulator/data-access/stop-emulator.ts'
-import {
-  filterCompatibleSystemImages,
-  filterSystemImagesForPlatform,
-  listInstalledAndroidPlatforms,
-} from '../src/emulator/data-access/system-image-package-manager.ts'
+import { filterCompatibleSystemImages } from '../src/emulator/data-access/system-image-package-manager.ts'
 import {
   listAvailableSystemImages,
   parseSystemImageRepository,
@@ -101,10 +97,6 @@ async function fileExists(filePath: string): Promise<boolean> {
     () => true,
     () => false,
   )
-}
-
-async function installAndroidPlatform(sdkRoot: string, androidPlatform: string) {
-  await mkdir(join(sdkRoot, 'platforms', androidPlatform), { recursive: true })
 }
 
 async function installSystemImage(sdkRoot: string, systemImage: string) {
@@ -276,22 +268,7 @@ describe('emulator', () => {
     }
   })
 
-  test('lists installed Android platforms newest first', async () => {
-    const sdkRoot = await createTemporaryDirectory('solana-mobile-android-platforms-')
-
-    try {
-      await installAndroidPlatform(sdkRoot, 'android-36')
-      await installAndroidPlatform(sdkRoot, 'android-36.1')
-      await installAndroidPlatform(sdkRoot, 'android-37.0')
-      await mkdir(join(sdkRoot, 'platforms', 'preview'), { recursive: true })
-
-      expect(await listInstalledAndroidPlatforms(sdkRoot)).toEqual(['android-37.0', 'android-36.1', 'android-36'])
-    } finally {
-      await rm(sdkRoot, { force: true, recursive: true })
-    }
-  })
-
-  test('selects the latest installed Google Play system image by default', () => {
+  test('selects the newest image on the default API level when installed, else the newest Google Play image', () => {
     expect(
       selectDefaultSystemImage([
         'system-images;android-36;google_apis_playstore;arm64-v8a',
@@ -301,6 +278,18 @@ describe('emulator', () => {
         'system-images;android-35;google_apis_playstore;arm64-v8a',
       ]),
     ).toBe('system-images;android-36.1;google_apis_playstore;arm64-v8a')
+    expect(
+      selectDefaultSystemImage([
+        'system-images;android-35;google_apis_playstore;arm64-v8a',
+        'system-images;android-37.1;google_apis_playstore;arm64-v8a',
+      ]),
+    ).toBe('system-images;android-37.1;google_apis_playstore;arm64-v8a')
+    expect(
+      selectDefaultSystemImage([
+        'system-images;android-36;google_apis_playstore_ps16k;arm64-v8a',
+        'system-images;android-37;google_apis_playstore;arm64-v8a',
+      ]),
+    ).toBe('system-images;android-36;google_apis_playstore_ps16k;arm64-v8a')
   })
 
   test('selects a 16 KB Google Play image when no standard image is installed', () => {
@@ -852,12 +841,13 @@ describe('emulator', () => {
     )
   })
 
-  test('filters compatible Google Play images newest first', () => {
+  test('filters compatible Google Play images, default API level first, then newest first', () => {
     expect(
       filterCompatibleSystemImages(
         [
           'system-images;android-36;google_apis_playstore;x86_64',
           'system-images;android-35;google_apis_playstore;arm64-v8a',
+          'system-images;android-36;google_apis_playstore;arm64-v8a',
           'system-images;android-36.1;google_apis_playstore;arm64-v8a',
           'system-images;android-37;google_apis;arm64-v8a',
           'system-images;android-37.1;google_apis_playstore;arm64-v8a',
@@ -866,29 +856,11 @@ describe('emulator', () => {
         'arm64',
       ),
     ).toEqual([
+      'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+      'system-images;android-36;google_apis_playstore;arm64-v8a',
       'system-images;android-37.1;google_apis_playstore;arm64-v8a',
       'system-images;android-37.1;google_apis_playstore_ps16k;arm64-v8a',
-      'system-images;android-36.1;google_apis_playstore;arm64-v8a',
       'system-images;android-35;google_apis_playstore;arm64-v8a',
-    ])
-  })
-
-  test('filters system images for one Android platform', () => {
-    expect(
-      filterSystemImagesForPlatform(
-        [
-          'system-images;android-36.1;google_apis_playstore;arm64-v8a',
-          'system-images;android-37.0;google_apis_playstore;arm64-v8a',
-          'system-images;android-37.0-ext2;google_apis_playstore;arm64-v8a',
-          'system-images;android-37.0;google_apis_playstore_ps16k;arm64-v8a',
-          'system-images;android-38;google_apis_playstore;arm64-v8a',
-        ],
-        'android-37.0',
-      ),
-    ).toEqual([
-      'system-images;android-37.0;google_apis_playstore;arm64-v8a',
-      'system-images;android-37.0-ext2;google_apis_playstore;arm64-v8a',
-      'system-images;android-37.0;google_apis_playstore_ps16k;arm64-v8a',
     ])
   })
 
@@ -903,8 +875,6 @@ describe('emulator', () => {
 
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
-      await installAndroidPlatform(sdkRoot, 'android-36.1')
-      await installAndroidPlatform(sdkRoot, 'android-37.0')
 
       await runEmulatorImagesInstall(
         { sdkRoot },
@@ -912,6 +882,7 @@ describe('emulator', () => {
           architecture: 'arm64',
           fetchText: async () =>
             systemImageRepositoryXml([
+              'system-images;android-36;google_apis_playstore;arm64-v8a',
               'system-images;android-36.1;google_apis_playstore;arm64-v8a',
               'system-images;android-37.0;google_apis_playstore;arm64-v8a',
               'system-images;android-37.0-ext2;google_apis_playstore;arm64-v8a',
@@ -934,17 +905,31 @@ describe('emulator', () => {
             throw new Error('Unexpected interactive install.')
           },
           runSelect: async (options) => {
-            expect(options.initialValue).toBe(selectedSystemImage)
+            expect(options.initialValue).toBe('system-images;android-36.1;google_apis_playstore;arm64-v8a')
             expect(options.message).toBe('Select a system image to install')
             expect(options.options.map((option) => option.value)).toEqual([
+              'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+              'system-images;android-36;google_apis_playstore;arm64-v8a',
+              'system-images;android-38;google_apis_playstore;arm64-v8a',
               selectedSystemImage,
               'system-images;android-37.0;google_apis_playstore;arm64-v8a',
               'system-images;android-37.0;google_apis_playstore_ps16k;arm64-v8a',
             ])
             expect(options.options.map((option) => option.label)).toEqual([
+              'system-images/android-36.1/google_apis_playstore/arm64-v8a',
+              'system-images/android-36/google_apis_playstore/arm64-v8a',
+              'system-images/android-38/google_apis_playstore/arm64-v8a',
               'system-images/android-37.0-ext2/google_apis_playstore/arm64-v8a',
               'system-images/android-37.0/google_apis_playstore/arm64-v8a',
               'system-images/android-37.0/google_apis_playstore_ps16k/arm64-v8a (16 KB page size)',
+            ])
+            expect(options.options.map((option) => option.hint)).toEqual([
+              'recommended',
+              'recommended',
+              undefined,
+              undefined,
+              undefined,
+              undefined,
             ])
             return selectedSystemImage
           },
@@ -979,23 +964,23 @@ describe('emulator', () => {
     }
   })
 
-  test('selects from all compatible images when requested', async () => {
-    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-all-')
+  test('offers the newest image first when the default API level is unavailable', async () => {
+    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-newest-')
     const android = join(sdkRoot, 'cmdline-tools', '22.0', 'bin', 'android')
     const installs: Array<[string, ...string[]]> = []
-    const selectedSystemImage = 'system-images;android-36.1;google_apis_playstore;arm64-v8a'
+    const selectedSystemImage = 'system-images;android-34;google_apis_playstore;arm64-v8a'
 
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
 
       await runEmulatorImagesInstall(
-        { all: true, sdkRoot, verbose: true },
+        { sdkRoot, verbose: true },
         {
           architecture: 'arm64',
           fetchText: async () =>
             systemImageRepositoryXml([
+              'system-images;android-34;google_apis_playstore;arm64-v8a',
               'system-images;android-35;google_apis_playstore_ps16k;arm64-v8a',
-              'system-images;android-36.1;google_apis_playstore;arm64-v8a',
               'system-images;android-37.0;google_apis_playstore;x86_64',
               'system-images;android-38;google_apis_playstore;arm64-v8a',
             ]),
@@ -1010,8 +995,8 @@ describe('emulator', () => {
             expect(options.initialValue).toBe('system-images;android-38;google_apis_playstore;arm64-v8a')
             expect(options.options.map((option) => option.value)).toEqual([
               'system-images;android-38;google_apis_playstore;arm64-v8a',
-              selectedSystemImage,
               'system-images;android-35;google_apis_playstore_ps16k;arm64-v8a',
+              selectedSystemImage,
             ])
             return selectedSystemImage
           },
@@ -1025,56 +1010,25 @@ describe('emulator', () => {
       )
 
       expect(installs).toEqual([
-        [android, 'sdk', 'install', 'system-images/android-36.1/google_apis_playstore/arm64-v8a'],
+        [android, 'sdk', 'install', 'system-images/android-34/google_apis_playstore/arm64-v8a'],
       ])
     } finally {
       await rm(sdkRoot, { force: true, recursive: true })
     }
   })
 
-  test('reports when no Android platforms are installed before selecting an image', async () => {
-    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-no-platforms-')
-    const logs: string[] = []
-
-    try {
-      await runEmulatorImagesInstall(
-        { sdkRoot },
-        {
-          architecture: 'arm64',
-          fetchText: async () => {
-            throw new Error('Unexpected system image listing.')
-          },
-          intro: () => {},
-          log: (message) => logs.push(message),
-          runInteractiveCommand: async () => {
-            throw new Error('Unexpected system image install.')
-          },
-          runSelect: async () => {
-            throw new Error('Unexpected system image prompt.')
-          },
-        },
-      )
-
-      expect(logs).toEqual(['No Android SDK platforms are installed.'])
-    } finally {
-      await rm(sdkRoot, { force: true, recursive: true })
-    }
-  })
-
-  test('reports when no images match the latest installed Android platform', async () => {
-    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-no-platform-match-')
+  test('reports when no images match the host architecture', async () => {
+    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-no-architecture-match-')
     const logs: string[] = []
 
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
-      await installAndroidPlatform(sdkRoot, 'android-37.0')
 
       await runEmulatorImagesInstall(
         { sdkRoot },
         {
           architecture: 'arm64',
-          fetchText: async () =>
-            systemImageRepositoryXml(['system-images;android-36.1;google_apis_playstore;arm64-v8a']),
+          fetchText: async () => systemImageRepositoryXml(['system-images;android-36;google_apis_playstore;x86_64']),
           intro: () => {},
           log: (message) => logs.push(message),
           platform: 'linux',
@@ -1087,7 +1041,7 @@ describe('emulator', () => {
         },
       )
 
-      expect(logs).toEqual(['No system images are available to install for android-37.0.'])
+      expect(logs).toEqual(['No system images are available to install on arm64.'])
     } finally {
       await rm(sdkRoot, { force: true, recursive: true })
     }
@@ -1574,7 +1528,6 @@ describe('emulator', () => {
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
       await installAndroidCommandLineTool(sdkRoot, 'avdmanager', '22.0')
-      await installAndroidPlatform(sdkRoot, 'android-37.0')
 
       await runEmulatorCreate(
         {
@@ -1617,9 +1570,10 @@ describe('emulator', () => {
             throw new Error('Unexpected interactive install.')
           },
           runSelect: async (options) => {
-            expect(options.initialValue).toBe(systemImage)
+            expect(options.initialValue).toBe('system-images;android-36.1;google_apis_playstore;arm64-v8a')
             expect(options.message).toBe('Select a system image to install')
             expect(options.options.map((option) => option.value)).toEqual([
+              'system-images;android-36.1;google_apis_playstore;arm64-v8a',
               systemImage,
               'system-images;android-37.0;google_apis_playstore_ps16k;arm64-v8a',
             ])
@@ -1692,7 +1646,6 @@ describe('emulator', () => {
     try {
       await installAndroidCommandLineTool(sdkRoot, 'android', '22.0')
       await installAndroidCommandLineTool(sdkRoot, 'avdmanager', '22.0')
-      await installAndroidPlatform(sdkRoot, 'android-37.0')
 
       await runEmulatorCreate(
         {
@@ -3000,7 +2953,6 @@ describe('emulator command', () => {
       'images',
       'install',
       'system-images/android-36.1/google_apis_playstore/arm64-v8a',
-      '--all',
       '--sdk-root',
       '/sdk',
       '--verbose',
@@ -3008,7 +2960,6 @@ describe('emulator command', () => {
 
     expect(emulatorImagesInstallOptions).toEqual([
       {
-        all: true,
         sdkRoot: '/sdk',
         systemImage: 'system-images/android-36.1/google_apis_playstore/arm64-v8a',
         verbose: true,

@@ -4,8 +4,7 @@ import { runInteractiveExecutable } from '../../core/data-access/run-executable.
 import { parseSystemImagePackage, systemImagePackageToRelativeDirectory } from './avd-config.ts'
 import { defaultPathExists } from './create-avd.ts'
 import type { DirectoryReader, PathChecker } from './emulator-types.ts'
-import { defaultReadDirectory } from './list-installed-avds.ts'
-import { isSystemImageInstalled, sortSystemImagesNewestFirst } from './list-installed-system-images.ts'
+import { isSystemImageInstalled, sortSystemImagesDefaultFirst } from './list-installed-system-images.ts'
 import { resolveAndroidCommandLineTool } from './resolve-android-command-line-tool.ts'
 
 export interface AndroidSdkPackageManager {
@@ -31,14 +30,7 @@ export function filterCompatibleSystemImages(systemImages: readonly string[], ar
     return systemImageAbi === abi && (tagId === 'google_apis_playstore' || tagId === 'google_apis_playstore_ps16k')
   })
 
-  return sortSystemImagesNewestFirst(compatibleSystemImages)
-}
-
-export function filterSystemImagesForPlatform(systemImages: readonly string[], androidPlatform: string): string[] {
-  return systemImages.filter((systemImage) => {
-    const imagePlatform = parseSystemImagePackage(systemImage).platform
-    return imagePlatform === androidPlatform || imagePlatform.startsWith(`${androidPlatform}-ext`)
-  })
+  return sortSystemImagesDefaultFirst(compatibleSystemImages)
 }
 
 export async function installSystemImage(
@@ -81,20 +73,6 @@ export async function installSystemImage(
       .filter(Boolean)
       .join('\n'),
   )
-}
-
-export async function listInstalledAndroidPlatforms(
-  sdkRoot: string,
-  { readDirectory = defaultReadDirectory }: Pick<SystemImagePackageManagerDependencies, 'readDirectory'> = {},
-): Promise<string[]> {
-  try {
-    return (await readDirectory(join(sdkRoot, 'platforms')))
-      .filter((entry) => entry.isDirectory() && /^android-\d+(?:\.\d+)*$/.test(entry.name))
-      .map((entry) => entry.name)
-      .sort((left, right) => right.localeCompare(left, 'en', { numeric: true }))
-  } catch {
-    return []
-  }
 }
 
 export async function uninstallSystemImages(
