@@ -339,11 +339,7 @@ export async function installEmulatorSystemImage(
       pathExists,
       platform,
       readDirectory,
-      runInteractiveCommand: options.verbose
-        ? runInteractiveCommand
-        : async (command: [string, ...string[]]) => {
-            await runCommand(command)
-          },
+      runInteractiveCommand: options.verbose ? runInteractiveCommand : runCommand,
     })
     installSpinner?.stop('Installed Android system image')
   } catch (error) {

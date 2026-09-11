@@ -812,6 +812,11 @@ describe('emulator', () => {
           platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
+
+            if (cmd[2] === 'install') {
+              await installSystemImage(sdkRoot, selectedSystemImage)
+            }
+
             return ''
           },
           runInteractiveCommand: async () => {
@@ -888,6 +893,7 @@ describe('emulator', () => {
           platform: 'linux',
           runInteractiveCommand: async (cmd) => {
             installs.push(cmd)
+            await installSystemImage(sdkRoot, selectedSystemImage)
           },
           runSelect: async (options) => {
             expect(options.initialValue).toBe('system-images;android-38;google_apis_playstore;arm64-v8a')
@@ -1083,6 +1089,54 @@ describe('emulator', () => {
     }
   })
 
+  test('rejects a clean install exit that leaves no image behind', async () => {
+    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-exit-zero-absent-')
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const spinnerEvents: string[] = []
+    const systemImage = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'sdkmanager', '22.0')
+
+      await runEmulatorImagesInstall(
+        { sdkRoot, systemImage },
+        {
+          architecture: 'arm64',
+          cancel: (message) => cancellations.push(message),
+          fetchText: async () => systemImageRepositoryXml([systemImage]),
+          intro: () => {},
+          log: () => {},
+          platform: 'linux',
+          runCommand: async () => `Warning: Failed to find package ${systemImage}\n`,
+          spinner: () => ({
+            cancel: () => {},
+            clear: () => {},
+            error: (message) => spinnerEvents.push(`error:${message}`),
+            isCancelled: false,
+            message: () => {},
+            start: (message) => spinnerEvents.push(`start:${message}`),
+            stop: (message) => spinnerEvents.push(`stop:${message}`),
+          }),
+        },
+      )
+
+      expect(cancellations).toEqual([
+        `Error: System image was not installed: ${systemImage}\nWarning: Failed to find package ${systemImage}`,
+      ])
+      expect(spinnerEvents).toEqual([
+        'start:Fetching available system images',
+        'stop:Fetched available system images',
+        'start:Installing Android system image',
+        `error:System image was not installed: ${systemImage}\nWarning: Failed to find package ${systemImage}`,
+      ])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+      await rm(sdkRoot, { force: true, recursive: true })
+    }
+  })
+
   test('installs an explicit image with sdkmanager fallback', async () => {
     const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-sdkmanager-')
     const sdkmanager = join(sdkRoot, 'cmdline-tools', '20.0', 'bin', 'sdkmanager')
@@ -1105,6 +1159,7 @@ describe('emulator', () => {
           platform: 'linux',
           runInteractiveCommand: async (cmd) => {
             installs.push(cmd)
+            await installSystemImage(sdkRoot, systemImage)
           },
           runSelect: async () => {
             throw new Error('Unexpected system image prompt.')
