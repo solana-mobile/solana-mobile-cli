@@ -13,7 +13,7 @@ export interface AndroidSdkPackageManager {
   type: 'android' | 'sdkmanager'
 }
 
-/** Fits both a captured and an interactive runner: an install is judged by what lands on disk, output only feeds the error. */
+/** Fits both a captured and an interactive runner: installs and removals are judged by the disk, output only feeds the error. */
 type SystemImageCommandRunner = (cmd: [string, ...string[]], options?: InteractiveRunCommandOptions) => Promise<unknown>
 
 export interface SystemImagePackageManagerDependencies {
@@ -114,7 +114,41 @@ export async function uninstallSystemImages(
       : systemImages
   const args = packageManager.type === 'android' ? ['sdk', 'remove', ...packageNames] : ['--uninstall', ...packageNames]
 
-  await runInteractiveCommand([packageManager.executable, ...args])
+  let failure: unknown
+  let output: unknown
+
+  // Same as the install: the exit code cannot judge the removal, because on Windows the tool aborts on exit
+  // (STATUS_STACK_BUFFER_OVERRUN) after removing the packages. What is left on disk can. See #56.
+  try {
+    output = await runInteractiveCommand([packageManager.executable, ...args])
+  } catch (error) {
+    failure = error
+  }
+
+  const remainingSystemImages: string[] = []
+
+  for (const systemImage of systemImages) {
+    if (await isSystemImageInstalled(sdkRoot, systemImage, pathExists)) {
+      remainingSystemImages.push(systemImage)
+    }
+  }
+
+  if (remainingSystemImages.length === 0) {
+    return
+  }
+
+  if (failure) {
+    throw failure
+  }
+
+  throw new Error(
+    [
+      `System images were not deleted: ${remainingSystemImages.join(', ')}`,
+      typeof output === 'string' ? output.trim() : '',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  )
 }
 
 export function normalizeSystemImagePackage(systemImage: string): string {

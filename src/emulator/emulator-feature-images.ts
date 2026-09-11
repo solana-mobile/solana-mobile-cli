@@ -179,27 +179,27 @@ export async function runEmulatorImagesDelete(
       )
     }
 
-    const runSystemImageUninstall = options.verbose
-      ? runInteractiveCommand
-      : async (command: [string, ...string[]]) => {
-          const deleteLog = createTaskLog({ title: 'Deleting Android system images' })
+    // The log wraps the whole removal so that a tool crash after the images are gone still ends in success.
+    const deleteLog = options.verbose ? undefined : createTaskLog({ title: 'Deleting Android system images' })
 
-          try {
-            const output = await runCommand(command)
-            if (output) deleteLog.message(output)
-            deleteLog.success('Deleted Android system images')
-          } catch (error) {
-            deleteLog.error(error instanceof Error ? error.message : String(error))
-            throw error
-          }
-        }
-
-    await uninstallSystemImages(systemImages, sdkRoot, {
-      pathExists,
-      platform,
-      readDirectory,
-      runInteractiveCommand: runSystemImageUninstall,
-    })
+    try {
+      await uninstallSystemImages(systemImages, sdkRoot, {
+        pathExists,
+        platform,
+        readDirectory,
+        runInteractiveCommand: options.verbose
+          ? runInteractiveCommand
+          : async (command: [string, ...string[]]) => {
+              const output = await runCommand(command)
+              if (output) deleteLog?.message(output)
+              return output
+            },
+      })
+      deleteLog?.success('Deleted Android system images')
+    } catch (error) {
+      deleteLog?.error(error instanceof Error ? error.message : String(error))
+      throw error
+    }
 
     for (const systemImage of systemImages) {
       log(`Deleted system image: ${systemImage}`)
