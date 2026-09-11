@@ -12,7 +12,14 @@ import { parseJavaVersion } from '../src/doctor/data-access/check-java.ts'
 import { checkNodeVersion, normalizeNodeVersion } from '../src/doctor/data-access/check-node-version.ts'
 import { checkOperatingSystem, checkPackageManagers } from '../src/doctor/data-access/check-system-and-javascript.ts'
 import type { DoctorCheckResult } from '../src/doctor/data-access/doctor-check-result.ts'
-import { type DoctorEnvironment, expandHome } from '../src/doctor/data-access/doctor-environment.ts'
+import {
+  type DoctorEnvironment,
+  defaultDoctorEnvironment,
+  expandHome,
+  findExecutable,
+  parseVersion,
+  runExecutable,
+} from '../src/doctor/data-access/doctor-environment.ts'
 import { buildDoctorReport, deriveCapabilities, getDoctorExitCode } from '../src/doctor/data-access/doctor-report.ts'
 import { formatDoctorReport } from '../src/doctor/ui/doctor-ui-report.ts'
 
@@ -74,6 +81,28 @@ describe('checkAdbVersion', () => {
     )
     expect(result.actual).toBe('33.0.3')
     expect(result.status).toBe('pass')
+  })
+})
+
+describe('doctor command runner', () => {
+  test.skipIf(process.platform === 'win32')('routes batch files through cmd.exe on Windows', async () => {
+    // No cmd.exe here, so the spawn failure shows what would have been launched.
+    await expect(runExecutable('C:\\tools\\npm.cmd', ['--version'], 5_000, 'win32')).rejects.toMatchObject({
+      code: 'ENOENT',
+      path: 'cmd.exe',
+      spawnargs: ['/c', 'C:\\tools\\npm.cmd', '--version'],
+    })
+    await expect(runExecutable('C:\\tools\\npm.cmd', ['--version'], 5_000, 'darwin')).rejects.toMatchObject({
+      path: 'C:\\tools\\npm.cmd',
+    })
+  })
+
+  test.skipIf(process.platform !== 'win32')('runs the npm launcher on Windows', async () => {
+    const npm = await findExecutable('npm', defaultDoctorEnvironment)
+    expect(npm).toMatch(/\.cmd$/i)
+
+    const result = await runExecutable(npm as string, ['--version'])
+    expect(parseVersion(result.stdout)).toBeDefined()
   })
 })
 

@@ -19,12 +19,17 @@ import {
   filterCompatibleSystemImages,
   filterSystemImagesForPlatform,
   installSystemImage,
-  listAvailableSystemImages,
   listInstalledAndroidPlatforms,
   normalizeSystemImagePackage,
+  resolveAndroidSdkPackageManager,
   type SystemImagePackageManagerDependencies,
   uninstallSystemImages,
 } from './data-access/system-image-package-manager.ts'
+import {
+  defaultFetchText,
+  type ListAvailableSystemImagesDependencies,
+  listAvailableSystemImages,
+} from './data-access/system-image-repository.ts'
 import { selectInstalledSystemImages } from './ui/emulator-ui-select-installed-system-images.ts'
 import { selectSystemImage } from './ui/emulator-ui-select-system-image.ts'
 
@@ -53,7 +58,8 @@ interface RunEmulatorImagesDeleteDependencies
 }
 
 export interface InstallEmulatorSystemImageDependencies
-  extends PromptDependencies,
+  extends ListAvailableSystemImagesDependencies,
+    PromptDependencies,
     SystemImagePackageManagerDependencies {
   architecture?: string
   log?: (message: string) => void
@@ -230,6 +236,7 @@ export async function installEmulatorSystemImage(
   options: EmulatorImagesInstallCommandOptions = {},
   {
     architecture = process.arch,
+    fetchText = defaultFetchText,
     log = clackLog.message,
     pathExists,
     platform,
@@ -260,20 +267,19 @@ export async function installEmulatorSystemImage(
     return
   }
 
+  // Fail before the download and the prompt when nothing could install the chosen image.
+  await resolveAndroidSdkPackageManager(sdkRoot, { pathExists, platform, readDirectory })
+
   let availableSystemImages: string[]
 
   if (options.verbose) {
     const fetchLog = createTaskLog({ title: 'Fetching available system images' })
 
     try {
-      availableSystemImages = await listAvailableSystemImages(sdkRoot, {
-        pathExists,
-        platform,
-        readDirectory,
-        runCommand: async (command) => {
-          const output = await runCommand(command)
-          if (output) fetchLog.message(output)
-          return output
+      availableSystemImages = await listAvailableSystemImages({
+        fetchText: async (url) => {
+          fetchLog.message(url)
+          return fetchText(url)
         },
       })
       fetchLog.success('Fetched available system images')
@@ -286,12 +292,7 @@ export async function installEmulatorSystemImage(
     fetchSpinner.start('Fetching available system images')
 
     try {
-      availableSystemImages = await listAvailableSystemImages(sdkRoot, {
-        pathExists,
-        platform,
-        readDirectory,
-        runCommand,
-      })
+      availableSystemImages = await listAvailableSystemImages({ fetchText })
       fetchSpinner.stop('Fetched available system images')
     } catch (error) {
       fetchSpinner.error(error instanceof Error ? error.message : String(error))
@@ -329,27 +330,27 @@ export async function installEmulatorSystemImage(
     return
   }
 
-  const runSystemImageInstall = options.verbose
-    ? runInteractiveCommand
-    : async (command: [string, ...string[]]) => {
-        const installSpinner = createSpinner()
-        installSpinner.start('Installing Android system image')
+  // The spinner wraps the whole install so that an installer crash after a complete install still ends in success.
+  const installSpinner = options.verbose ? undefined : createSpinner()
+  installSpinner?.start('Installing Android system image')
 
-        try {
-          await runCommand(command)
-          installSpinner.stop('Installed Android system image')
-        } catch (error) {
-          installSpinner.error(error instanceof Error ? error.message : String(error))
-          throw error
-        }
-      }
+  try {
+    await installSystemImage(systemImage, sdkRoot, {
+      pathExists,
+      platform,
+      readDirectory,
+      runInteractiveCommand: options.verbose
+        ? runInteractiveCommand
+        : async (command: [string, ...string[]]) => {
+            await runCommand(command)
+          },
+    })
+    installSpinner?.stop('Installed Android system image')
+  } catch (error) {
+    installSpinner?.error(error instanceof Error ? error.message : String(error))
+    throw error
+  }
 
-  await installSystemImage(systemImage, sdkRoot, {
-    pathExists,
-    platform,
-    readDirectory,
-    runInteractiveCommand: runSystemImageInstall,
-  })
   log(`Installed system image: ${systemImage}`)
   return systemImage
 }

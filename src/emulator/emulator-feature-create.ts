@@ -37,6 +37,7 @@ export async function runEmulatorCreate(
   {
     architecture,
     cancel: showCancel = cancel,
+    fetchText,
     formatCommand = formatCliCommand,
     getHomeDirectory = homedir,
     intro: showIntro = intro,
@@ -94,6 +95,7 @@ export async function runEmulatorCreate(
           },
           {
             architecture,
+            fetchText,
             log,
             pathExists,
             platform,

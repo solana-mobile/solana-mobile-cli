@@ -37,8 +37,12 @@ import {
   filterCompatibleSystemImages,
   filterSystemImagesForPlatform,
   listInstalledAndroidPlatforms,
-  parseSystemImagePackages,
 } from '../src/emulator/data-access/system-image-package-manager.ts'
+import {
+  listAvailableSystemImages,
+  parseSystemImageRepository,
+  SYSTEM_IMAGE_REPOSITORY_URL,
+} from '../src/emulator/data-access/system-image-repository.ts'
 import { applyEmulatorTweaks, tuneEmulator, waitForEmulatorBoot } from '../src/emulator/data-access/tune-emulator.ts'
 import { runEmulatorCreate } from '../src/emulator/emulator-feature-create.ts'
 import { runEmulatorDelete } from '../src/emulator/emulator-feature-delete.ts'
@@ -107,6 +111,32 @@ async function installSystemImage(sdkRoot: string, systemImage: string) {
   const directory = join(sdkRoot, ...systemImage.split(';'))
   await mkdir(directory, { recursive: true })
   await writeFile(join(directory, 'source.properties'), '')
+}
+
+/** A `sys-img2` feed like Google's, with every package on the stable channel unless one names another. */
+function systemImageRepositoryXml(packages: ReadonlyArray<string | { channel: string; path: string }>): string {
+  const remotePackages = packages
+    .map((entry) => (typeof entry === 'string' ? { channel: 'channel-0', path: entry } : entry))
+    .map(
+      ({ channel, path }) => `  <remotePackage path="${path}">
+    <type-details xsi:type="sys-img:sysImgDetailsType">
+      <abi>${path.split(';')[3]}</abi>
+    </type-details>
+    <revision><major>1</major></revision>
+    <display-name>${path}</display-name>
+    <channelRef ref="${channel}"/>
+    <archives><archive><complete><url>${path}.zip</url></complete></archive></archives>
+  </remotePackage>`,
+    )
+    .join('\n')
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<sys-img:sdk-sys-img xmlns:sys-img="http://schemas.android.com/sdk/android/repo/sys-img2/04" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <channel id="channel-0">stable</channel>
+  <channel id="channel-2">dev</channel>
+${remotePackages}
+</sys-img:sdk-sys-img>
+`
 }
 
 describe('emulator', () => {
@@ -665,22 +695,50 @@ describe('emulator', () => {
     }
   })
 
-  test('parses modern and legacy system image package output', () => {
+  test('parses the stable system images from the repository feed', () => {
     expect(
-      parseSystemImagePackages(`
-Installed packages:
-  system-images/android-35/google_apis_playstore/arm64-v8a  9.0.0  Google Play ARM 64 v8a System Image
-Available Packages:
-  system-images;android-34;google_apis_playstore;arm64-v8a | 14 | Google Play ARM 64 v8a System Image
-  system-images/android-36/google_apis_playstore/arm64-v8a  7.0.0  Google Play ARM 64 v8a System Image
-  system-images/android-37.1/google_apis_playstore_ps16k/arm64-v8a  7.0.0  16 KB Page Size Google Play ARM 64 v8a System Image
-`),
+      parseSystemImageRepository(
+        systemImageRepositoryXml([
+          'system-images;android-36;google_apis_playstore;arm64-v8a',
+          'system-images;android-35;google_apis_playstore;arm64-v8a',
+          'system-images;android-36;google_apis_playstore;arm64-v8a',
+          // The SDK tools hide the dev channel unless asked, so the picker does too.
+          { channel: 'channel-2', path: 'system-images;android-37.2;google_apis_playstore_ps16k;arm64-v8a' },
+          'system-images;android-37.1;google_apis_playstore_ps16k;arm64-v8a',
+        ]),
+      ),
     ).toEqual([
-      'system-images;android-34;google_apis_playstore;arm64-v8a',
       'system-images;android-35;google_apis_playstore;arm64-v8a',
       'system-images;android-36;google_apis_playstore;arm64-v8a',
       'system-images;android-37.1;google_apis_playstore_ps16k;arm64-v8a',
     ])
+  })
+
+  test('lists available system images from the repository feed', async () => {
+    const urls: string[] = []
+
+    expect(
+      await listAvailableSystemImages({
+        fetchText: async (url) => {
+          urls.push(url)
+          return systemImageRepositoryXml(['system-images;android-36;google_apis_playstore;arm64-v8a'])
+        },
+      }),
+    ).toEqual(['system-images;android-36;google_apis_playstore;arm64-v8a'])
+    expect(urls).toEqual([SYSTEM_IMAGE_REPOSITORY_URL])
+
+    await expect(
+      listAvailableSystemImages({
+        fetchText: async () => {
+          throw new Error('HTTP 503 Service Unavailable')
+        },
+      }),
+    ).rejects.toThrow(
+      `Could not fetch the Android system image list from ${SYSTEM_IMAGE_REPOSITORY_URL}: HTTP 503 Service Unavailable`,
+    )
+    await expect(listAvailableSystemImages({ fetchText: async () => '<html>Not the feed</html>' })).rejects.toThrow(
+      `The Android system image list at ${SYSTEM_IMAGE_REPOSITORY_URL} contains no system images.`,
+    )
   })
 
   test('filters compatible Google Play images newest first', () => {
@@ -741,24 +799,20 @@ Available Packages:
         { sdkRoot },
         {
           architecture: 'arm64',
+          fetchText: async () =>
+            systemImageRepositoryXml([
+              'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+              'system-images;android-37.0;google_apis_playstore;arm64-v8a',
+              'system-images;android-37.0-ext2;google_apis_playstore;arm64-v8a',
+              'system-images;android-37.0;google_apis_playstore_ps16k;arm64-v8a',
+              'system-images;android-38;google_apis_playstore;arm64-v8a',
+            ]),
           intro: (message) => intros.push(message),
           log: (message) => logs.push(message),
           platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
-
-            if (cmd[2] === 'install') {
-              return ''
-            }
-
-            return `
-Available packages:
-  system-images/android-36.1/google_apis_playstore/arm64-v8a  4.0.0  Google Play ARM 64 v8a System Image
-  system-images/android-37.0/google_apis_playstore/arm64-v8a  7.0.0  Google Play ARM 64 v8a System Image
-  system-images/android-37.0-ext2/google_apis_playstore/arm64-v8a  1.0.0  Google Play ARM 64 v8a System Image
-  system-images/android-37.0/google_apis_playstore_ps16k/arm64-v8a  7.0.0  16 KB Page Size Google Play ARM 64 v8a System Image
-  system-images/android-38/google_apis_playstore/arm64-v8a  1.0.0  Google Play ARM 64 v8a System Image
-`
+            return ''
           },
           runInteractiveCommand: async () => {
             throw new Error('Unexpected interactive install.')
@@ -794,7 +848,6 @@ Available packages:
       )
 
       expect(commands).toEqual([
-        [android, 'sdk', 'list', '--all', 'system-images/*/google_apis_playstore*/*'],
         [android, 'sdk', 'install', 'system-images/android-37.0-ext2/google_apis_playstore/arm64-v8a'],
       ])
       expect(intros).toEqual(['solana-mobile emulator images install'])
@@ -823,16 +876,16 @@ Available packages:
         { all: true, sdkRoot, verbose: true },
         {
           architecture: 'arm64',
+          fetchText: async () =>
+            systemImageRepositoryXml([
+              'system-images;android-35;google_apis_playstore_ps16k;arm64-v8a',
+              'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+              'system-images;android-37.0;google_apis_playstore;x86_64',
+              'system-images;android-38;google_apis_playstore;arm64-v8a',
+            ]),
           intro: () => {},
           log: () => {},
           platform: 'linux',
-          runCommand: async () => `
-Available packages:
-  system-images/android-35/google_apis_playstore_ps16k/arm64-v8a  7.0.0  16 KB Page Size Google Play ARM 64 v8a System Image
-  system-images/android-36.1/google_apis_playstore/arm64-v8a  4.0.0  Google Play ARM 64 v8a System Image
-  system-images/android-37.0/google_apis_playstore/x86_64  7.0.0  Google Play Intel x86_64 Atom System Image
-  system-images/android-38/google_apis_playstore/arm64-v8a  1.0.0  Google Play ARM 64 v8a System Image
-`,
           runInteractiveCommand: async (cmd) => {
             installs.push(cmd)
           },
@@ -871,11 +924,11 @@ Available packages:
         { sdkRoot },
         {
           architecture: 'arm64',
-          intro: () => {},
-          log: (message) => logs.push(message),
-          runCommand: async () => {
+          fetchText: async () => {
             throw new Error('Unexpected system image listing.')
           },
+          intro: () => {},
+          log: (message) => logs.push(message),
           runInteractiveCommand: async () => {
             throw new Error('Unexpected system image install.')
           },
@@ -903,11 +956,11 @@ Available packages:
         { sdkRoot },
         {
           architecture: 'arm64',
+          fetchText: async () =>
+            systemImageRepositoryXml(['system-images;android-36.1;google_apis_playstore;arm64-v8a']),
           intro: () => {},
           log: (message) => logs.push(message),
           platform: 'linux',
-          runCommand: async () =>
-            '  system-images/android-36.1/google_apis_playstore/arm64-v8a  4.0.0  Google Play ARM 64 v8a System Image\n',
           runInteractiveCommand: async () => {
             throw new Error('Unexpected system image install.')
           },
@@ -923,10 +976,116 @@ Available packages:
     }
   })
 
+  test('accepts an installer crash once the system image is on disk', async () => {
+    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-crash-')
+    const android = join(sdkRoot, 'cmdline-tools', '22.0', 'bin', 'android.exe')
+    const commands: Array<[string, ...string[]]> = []
+    const logs: string[] = []
+    const spinnerEvents: string[] = []
+    const systemImage = 'system-images;android-36;google_apis_playstore;x86_64'
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'android.exe', '22.0')
+
+      await runEmulatorImagesInstall(
+        { sdkRoot, systemImage },
+        {
+          architecture: 'x64',
+          cancel: (message) => {
+            throw new Error(`Unexpected cancel: ${message}`)
+          },
+          fetchText: async () => systemImageRepositoryXml([systemImage]),
+          intro: () => {},
+          log: (message) => logs.push(message),
+          platform: 'win32',
+          runCommand: async (cmd) => {
+            commands.push(cmd)
+            await installSystemImage(sdkRoot, systemImage)
+            // How Node reports STATUS_STACK_BUFFER_OVERRUN, the Android CLI's exit after a complete install.
+            throw new Error('android.exe exited with code 3221226505')
+          },
+          runInteractiveCommand: async () => {
+            throw new Error('Unexpected interactive install.')
+          },
+          spinner: () => ({
+            cancel: (message) => spinnerEvents.push(`cancel:${message}`),
+            clear: () => {},
+            error: (message) => spinnerEvents.push(`error:${message}`),
+            isCancelled: false,
+            message: () => {},
+            start: (message) => spinnerEvents.push(`start:${message}`),
+            stop: (message) => spinnerEvents.push(`stop:${message}`),
+          }),
+        },
+      )
+
+      expect(commands).toEqual([[android, 'sdk', 'install', 'system-images/android-36/google_apis_playstore/x86_64']])
+      expect(logs).toEqual([`Installed system image: ${systemImage}`])
+      expect(spinnerEvents).toEqual([
+        'start:Fetching available system images',
+        'stop:Fetched available system images',
+        'start:Installing Android system image',
+        'stop:Installed Android system image',
+      ])
+    } finally {
+      await rm(sdkRoot, { force: true, recursive: true })
+    }
+  })
+
+  test('fails an install whose crash left no system image behind', async () => {
+    const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-failed-')
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const spinnerEvents: string[] = []
+    const systemImage = 'system-images;android-36;google_apis_playstore;x86_64'
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'android.exe', '22.0')
+
+      await runEmulatorImagesInstall(
+        { sdkRoot, systemImage },
+        {
+          architecture: 'x64',
+          cancel: (message) => cancellations.push(message),
+          fetchText: async () => systemImageRepositoryXml([systemImage]),
+          intro: () => {},
+          log: () => {},
+          platform: 'win32',
+          runCommand: async () => {
+            throw new Error('android.exe exited with code 3221226505')
+          },
+          runInteractiveCommand: async () => {
+            throw new Error('Unexpected interactive install.')
+          },
+          spinner: () => ({
+            cancel: (message) => spinnerEvents.push(`cancel:${message}`),
+            clear: () => {},
+            error: (message) => spinnerEvents.push(`error:${message}`),
+            isCancelled: false,
+            message: () => {},
+            start: (message) => spinnerEvents.push(`start:${message}`),
+            stop: (message) => spinnerEvents.push(`stop:${message}`),
+          }),
+        },
+      )
+
+      expect(cancellations).toEqual(['Error: android.exe exited with code 3221226505'])
+      expect(spinnerEvents).toEqual([
+        'start:Fetching available system images',
+        'stop:Fetched available system images',
+        'start:Installing Android system image',
+        'error:android.exe exited with code 3221226505',
+      ])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+      await rm(sdkRoot, { force: true, recursive: true })
+    }
+  })
+
   test('installs an explicit image with sdkmanager fallback', async () => {
     const sdkRoot = await createTemporaryDirectory('solana-mobile-system-image-install-sdkmanager-')
     const sdkmanager = join(sdkRoot, 'cmdline-tools', '20.0', 'bin', 'sdkmanager')
-    const commands: Array<[string, ...string[]]> = []
     const installs: Array<[string, ...string[]]> = []
     const systemImage = 'system-images;android-37.1;google_apis_playstore_ps16k;arm64-v8a'
 
@@ -941,12 +1100,9 @@ Available packages:
         },
         {
           architecture: 'arm64',
+          fetchText: async () => systemImageRepositoryXml([systemImage]),
           log: () => {},
           platform: 'linux',
-          runCommand: async (cmd) => {
-            commands.push(cmd)
-            return `  ${systemImage} | 9 | Google Play ARM 64 v8a System Image\n`
-          },
           runInteractiveCommand: async (cmd) => {
             installs.push(cmd)
           },
@@ -968,7 +1124,6 @@ Available packages:
         },
       )
 
-      expect(commands).toEqual([[sdkmanager, '--list']])
       expect(installs).toEqual([[sdkmanager, '--install', systemImage]])
     } finally {
       await rm(sdkRoot, { force: true, recursive: true })
@@ -991,9 +1146,8 @@ Available packages:
         {
           architecture: 'arm64',
           cancel: (message) => cancellations.push(message),
+          fetchText: async () => systemImageRepositoryXml(['system-images;android-35;google_apis_playstore;arm64-v8a']),
           platform: 'linux',
-          runCommand: async () =>
-            `  system-images/android-35/google_apis_playstore/arm64-v8a  9.0.0  Google Play ARM 64 v8a System Image\n`,
           runInteractiveCommand: async () => {
             throw new Error('Unexpected system image install.')
           },
@@ -1263,6 +1417,12 @@ Available packages:
         },
         {
           architecture: 'arm64',
+          fetchText: async () =>
+            systemImageRepositoryXml([
+              'system-images;android-36.1;google_apis_playstore;arm64-v8a',
+              'system-images;android-37.0;google_apis_playstore;arm64-v8a',
+              'system-images;android-37.0;google_apis_playstore_ps16k;arm64-v8a',
+            ]),
           getHomeDirectory: () => homeDirectory,
           intro: (message) => intros.push(message),
           log: () => {},
@@ -1274,15 +1434,6 @@ Available packages:
               installs.push(cmd)
               await installSystemImage(sdkRoot, systemImage)
               return ''
-            }
-
-            if (cmd[0] === android && cmd[2] === 'list') {
-              return `
-Available packages:
-  system-images/android-36.1/google_apis_playstore/arm64-v8a  4.0.0  Google Play ARM 64 v8a System Image
-  system-images/android-37.0/google_apis_playstore/arm64-v8a  7.0.0  Google Play ARM 64 v8a System Image
-  system-images/android-37.0/google_apis_playstore_ps16k/arm64-v8a  7.0.0  16 KB Page Size Google Play ARM 64 v8a System Image
-`
             }
 
             if (cmd[0] === avdmanager) {
@@ -1324,10 +1475,6 @@ Available packages:
       )
 
       expect(commands).toEqual([
-        {
-          cmd: [android, 'sdk', 'list', '--all', 'system-images/*/google_apis_playstore*/*'],
-          stdin: undefined,
-        },
         {
           cmd: [android, 'sdk', 'install', 'system-images/android-37.0/google_apis_playstore/arm64-v8a'],
           stdin: undefined,
@@ -1389,15 +1536,12 @@ Available packages:
         },
         {
           architecture: 'arm64',
+          fetchText: async () => systemImageRepositoryXml([systemImage]),
           getHomeDirectory: () => homeDirectory,
           intro: () => {},
           log: () => {},
           platform: 'linux',
           runCommand: async (cmd) => {
-            if (cmd[0] === android) {
-              return `  ${systemImage} | 7 | Google Play ARM 64 v8a System Image\n`
-            }
-
             if (cmd[0] === avdmanager) {
               await mkdir(join(homeDirectory, '.android', 'avd', 'verbose_phone.avd'), { recursive: true })
               return ''
