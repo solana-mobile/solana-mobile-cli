@@ -171,15 +171,18 @@ describe('adb devices parsing', () => {
   test('parses offline device', () => expect(devices.find(({ serial }) => serial === 'OFF1')?.state).toBe('offline'))
   test('parses unauthorized device', () =>
     expect(devices.find(({ serial }) => serial === 'R5CX')?.state).toBe('unauthorized'))
-  test('warns about a tool that is on disk but cannot run', async () => {
+  test('warns about a tool that cannot start, but not about one that exits non-zero on -version', async () => {
     const avdmanager = join('/sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager')
     const emulator = join('/sdk', 'emulator', 'emulator')
+    const sdkmanager = join('/sdk', 'cmdline-tools', 'latest', 'bin', 'sdkmanager')
     const checks = await checkAndroidSdk(
       environment({
         listDirectory: async (path) => (path === join('/sdk', 'cmdline-tools') ? ['latest'] : []),
-        pathExists: async (path) => path === avdmanager || path === emulator,
+        pathExists: async (path) => path === avdmanager || path === emulator || path === sdkmanager,
         runCommand: async (path) => {
-          if (path === avdmanager) throw new Error('spawn EINVAL')
+          if (path === avdmanager) throw Object.assign(new Error('spawn EINVAL'), { code: 'EINVAL' })
+          // sdkmanager has no -version flag; it prints usage and exits 1, which is still a running tool.
+          if (path === sdkmanager) throw Object.assign(new Error('Command failed'), { code: 1 })
           return { path, stderr: '', stdout: 'Android emulator version 36.1.9.0' }
         },
       }),
@@ -187,6 +190,7 @@ describe('adb devices parsing', () => {
     )
 
     expect(checks.find(({ name }) => name === 'Emulator')).toMatchObject({ actual: '36.1.9.0', status: 'pass' })
+    expect(checks.find(({ name }) => name === 'sdkmanager')).toMatchObject({ actual: 'available', status: 'pass' })
     expect(checks.find(({ name }) => name === 'avdmanager')).toMatchObject({
       actual: 'not runnable',
       details: [`Executable: ${avdmanager}`, 'SDK root: /sdk', 'Error: spawn EINVAL'],
