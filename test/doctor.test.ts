@@ -3,6 +3,7 @@ import { basename, join } from 'node:path'
 import { checkAdbVersion, parseAdbVersion } from '../src/doctor/data-access/check-adb-version.ts'
 import { checkAndroidDevices, parseAdbDevices } from '../src/doctor/data-access/check-android-devices.ts'
 import {
+  checkAndroidSdk,
   parseAndroidApiLevels,
   parseEmulatorVersion,
   resolveAndroidSdk,
@@ -170,6 +171,30 @@ describe('adb devices parsing', () => {
   test('parses offline device', () => expect(devices.find(({ serial }) => serial === 'OFF1')?.state).toBe('offline'))
   test('parses unauthorized device', () =>
     expect(devices.find(({ serial }) => serial === 'R5CX')?.state).toBe('unauthorized'))
+  test('warns about a tool that is on disk but cannot run', async () => {
+    const avdmanager = join('/sdk', 'cmdline-tools', 'latest', 'bin', 'avdmanager')
+    const emulator = join('/sdk', 'emulator', 'emulator')
+    const checks = await checkAndroidSdk(
+      environment({
+        listDirectory: async (path) => (path === join('/sdk', 'cmdline-tools') ? ['latest'] : []),
+        pathExists: async (path) => path === avdmanager || path === emulator,
+        runCommand: async (path) => {
+          if (path === avdmanager) throw new Error('spawn EINVAL')
+          return { path, stderr: '', stdout: 'Android emulator version 36.1.9.0' }
+        },
+      }),
+      { path: '/sdk', searched: [], source: 'ANDROID_HOME' },
+    )
+
+    expect(checks.find(({ name }) => name === 'Emulator')).toMatchObject({ actual: '36.1.9.0', status: 'pass' })
+    expect(checks.find(({ name }) => name === 'avdmanager')).toMatchObject({
+      actual: 'not runnable',
+      details: [`Executable: ${avdmanager}`, 'SDK root: /sdk', 'Error: spawn EINVAL'],
+      message: 'avdmanager was found but could not be run.',
+      status: 'warn',
+    })
+  })
+
   test('reports no installed AVDs and no running emulator without failing', async () => {
     const checks = await checkAndroidDevices(
       environment({
