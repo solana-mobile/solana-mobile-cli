@@ -174,29 +174,36 @@ async function checkTool(
     }
   const category = name === 'Emulator' ? 'emulator' : 'android-sdk'
   const details = [`Executable: ${executable}`, `SDK root: ${sdkRoot}`]
-  let output: CommandResult
+  let output: CommandResult | undefined
   try {
     output = await environment.runCommand(executable, ['-version'])
   } catch (error) {
-    // Found on disk but not runnable, which is what the commands that need it will hit too.
-    return {
-      actual: 'not runnable',
-      category,
-      details: [...details, `Error: ${error instanceof Error ? error.message : String(error)}`],
-      message: `${name} was found but could not be run.`,
-      name,
-      recommendation: `Run \`${executable} -version\` to see why ${name} fails to start.`,
-      status: missingStatus,
+    // Only a failure to start counts; avdmanager and sdkmanager run fine and still exit non-zero on -version.
+    if (isSpawnFailure(error)) {
+      return {
+        actual: 'not runnable',
+        category,
+        details: [...details, `Error: ${error.message}`],
+        message: `${name} was found but could not be run.`,
+        name,
+        recommendation: `Run \`${executable} -version\` to see why ${name} fails to start.`,
+        status: missingStatus,
+      }
     }
   }
   return {
-    actual: parseVersion(`${output.stdout}\n${output.stderr}`) ?? 'available',
+    actual: (output && parseVersion(`${output.stdout}\n${output.stderr}`)) ?? 'available',
     category,
     details,
     message: `${name} is available.`,
     name,
     status: 'pass',
   }
+}
+
+/** Node reports a process that could not be started with a string code such as ENOENT or EINVAL; a non-zero exit has a number. */
+function isSpawnFailure(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && typeof (error as NodeJS.ErrnoException).code === 'string'
 }
 
 export function parseAndroidApiLevels(entries: string[]) {
