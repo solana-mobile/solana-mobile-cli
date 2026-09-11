@@ -32,7 +32,7 @@ export async function listInstalledSystemImages(
       for (const architecture of architectures) {
         const systemImage = `system-images;${platform};${tag};${architecture}`
 
-        if (await pathExists(join(systemImagesRoot, platform, tag, architecture, 'source.properties'))) {
+        if (await isSystemImageInstalled(sdkRoot, systemImage, pathExists)) {
           systemImages.push(systemImage)
         }
       }
@@ -40,6 +40,18 @@ export async function listInstalledSystemImages(
   }
 
   return systemImages.sort((left, right) => left.localeCompare(right))
+}
+
+/**
+ * A system image counts as installed once its `source.properties` is on disk: the SDK tools write it last, and the
+ * `sdk list` and AVD tooling treat the package as present only when it exists.
+ */
+export function isSystemImageInstalled(
+  sdkRoot: string,
+  systemImage: string,
+  pathExists: PathChecker = defaultPathExists,
+): Promise<boolean> {
+  return pathExists(join(sdkRoot, ...systemImage.split(';'), 'source.properties'))
 }
 
 export function resolveInstalledSystemImage(
