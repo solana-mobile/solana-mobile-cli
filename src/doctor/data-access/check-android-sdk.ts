@@ -1,7 +1,13 @@
 import { join } from 'node:path'
 import { listAndroidSdkRootCandidates } from '../../core/data-access/android-sdk-root.ts'
 import type { DoctorCheckResult } from './doctor-check-result.ts'
-import { type DoctorEnvironment, findExecutable, parseVersion, sortVersions } from './doctor-environment.ts'
+import {
+  type CommandResult,
+  type DoctorEnvironment,
+  findExecutable,
+  parseVersion,
+  sortVersions,
+} from './doctor-environment.ts'
 
 export type AndroidSdkResolution = { conflict?: string; path?: string; searched: string[]; source?: string }
 
@@ -166,17 +172,27 @@ async function checkTool(
       recommendation,
       status: missingStatus,
     }
-  let version: string | undefined
+  const category = name === 'Emulator' ? 'emulator' : 'android-sdk'
+  const details = [`Executable: ${executable}`, `SDK root: ${sdkRoot}`]
+  let output: CommandResult
   try {
-    const output = await environment.runCommand(executable, ['-version'])
-    version = parseVersion(`${output.stdout}\n${output.stderr}`)
-  } catch {
-    version = undefined
+    output = await environment.runCommand(executable, ['-version'])
+  } catch (error) {
+    // Found on disk but not runnable, which is what the commands that need it will hit too.
+    return {
+      actual: 'not runnable',
+      category,
+      details: [...details, `Error: ${error instanceof Error ? error.message : String(error)}`],
+      message: `${name} was found but could not be run.`,
+      name,
+      recommendation: `Run \`${executable} -version\` to see why ${name} fails to start.`,
+      status: missingStatus,
+    }
   }
   return {
-    actual: version ?? 'available',
-    category: name === 'Emulator' ? 'emulator' : 'android-sdk',
-    details: [`Executable: ${executable}`, `SDK root: ${sdkRoot}`],
+    actual: parseVersion(`${output.stdout}\n${output.stderr}`) ?? 'available',
+    category,
+    details,
     message: `${name} is available.`,
     name,
     status: 'pass',
