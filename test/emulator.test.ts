@@ -113,6 +113,10 @@ async function installSystemImage(sdkRoot: string, systemImage: string) {
   await writeFile(join(directory, 'source.properties'), '')
 }
 
+async function uninstallSystemImage(sdkRoot: string, systemImage: string) {
+  await rm(join(sdkRoot, ...systemImage.split(';')), { force: true, recursive: true })
+}
+
 /** A `sys-img2` feed like Google's, with every package on the stable channel unless one names another. */
 function systemImageRepositoryXml(packages: ReadonlyArray<string | { channel: string; path: string }>): string {
   const remotePackages = packages
@@ -441,6 +445,11 @@ describe('emulator', () => {
           platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
+
+            for (const systemImage of systemImages) {
+              await uninstallSystemImage(sdkRoot, systemImage)
+            }
+
             return ''
           },
           runMultiselect: async () => {
@@ -494,6 +503,11 @@ describe('emulator', () => {
           platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
+
+            for (const systemImage of systemImages) {
+              await uninstallSystemImage(sdkRoot, systemImage)
+            }
+
             return ''
           },
           taskLog: () => ({
@@ -628,6 +642,7 @@ describe('emulator', () => {
           platform: 'linux',
           runCommand: async (cmd) => {
             commands.push(cmd)
+            await uninstallSystemImage(sdkRoot, systemImages[1] as string)
             return ''
           },
           runMultiselect: async (options) => {
@@ -682,6 +697,7 @@ describe('emulator', () => {
           },
           runInteractiveCommand: async (cmd) => {
             commands.push(cmd)
+            await uninstallSystemImage(sdkRoot, systemImage)
           },
           taskLog: () => {
             throw new Error('Unexpected uninstall taskLog.')
@@ -691,6 +707,101 @@ describe('emulator', () => {
 
       expect(commands).toEqual([[sdkmanager, '--uninstall', systemImage]])
     } finally {
+      await rm(rootDirectory, { force: true, recursive: true })
+    }
+  })
+
+  test('accepts a removal tool crash once the system images are gone', async () => {
+    const rootDirectory = await createTemporaryDirectory('solana-mobile-system-image-delete-crash-')
+    const homeDirectory = join(rootDirectory, 'home')
+    const sdkRoot = join(rootDirectory, 'sdk')
+    const logs: string[] = []
+    const systemImage = 'system-images;android-36;google_apis_playstore;x86_64'
+    const taskLogEvents: string[] = []
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'android.exe', '22.0')
+      await installSystemImage(sdkRoot, systemImage)
+
+      await runEmulatorImagesDelete(
+        { sdkRoot, systemImages: [systemImage] },
+        {
+          cancel: (message) => {
+            throw new Error(`Unexpected cancel: ${message}`)
+          },
+          getHomeDirectory: () => homeDirectory,
+          intro: () => {},
+          log: (message) => logs.push(message),
+          platform: 'win32',
+          runCommand: async () => {
+            await uninstallSystemImage(sdkRoot, systemImage)
+            // How Node reports STATUS_STACK_BUFFER_OVERRUN, the Android CLI's exit after a complete removal.
+            throw new Error('android.exe exited with code 3221226505')
+          },
+          taskLog: ({ title }) => {
+            taskLogEvents.push(`start:${title}`)
+            return {
+              error: (message) => taskLogEvents.push(`error:${message}`),
+              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+              message: (message) => taskLogEvents.push(`message:${message}`),
+              success: (message) => taskLogEvents.push(`success:${message}`),
+            }
+          },
+        },
+      )
+
+      expect(logs).toEqual([`Deleted system image: ${systemImage}`])
+      expect(taskLogEvents).toEqual(['start:Deleting Android system images', 'success:Deleted Android system images'])
+    } finally {
+      await rm(rootDirectory, { force: true, recursive: true })
+    }
+  })
+
+  test('rejects a clean removal exit that leaves a system image behind', async () => {
+    const rootDirectory = await createTemporaryDirectory('solana-mobile-system-image-delete-exit-zero-present-')
+    const homeDirectory = join(rootDirectory, 'home')
+    const sdkRoot = join(rootDirectory, 'sdk')
+    const previousExitCode = process.exitCode
+    const cancellations: string[] = []
+    const systemImage = 'system-images;android-36;google_apis_playstore;arm64-v8a'
+    const taskLogEvents: string[] = []
+
+    try {
+      await installAndroidCommandLineTool(sdkRoot, 'sdkmanager', '22.0')
+      await installSystemImage(sdkRoot, systemImage)
+
+      await runEmulatorImagesDelete(
+        { sdkRoot, systemImages: [systemImage] },
+        {
+          cancel: (message) => cancellations.push(message),
+          getHomeDirectory: () => homeDirectory,
+          intro: () => {},
+          log: () => {},
+          platform: 'linux',
+          runCommand: async () => `Warning: Failed to find package ${systemImage}\n`,
+          taskLog: ({ title }) => {
+            taskLogEvents.push(`start:${title}`)
+            return {
+              error: (message) => taskLogEvents.push(`error:${message}`),
+              group: () => ({ error: () => {}, message: () => {}, success: () => {} }),
+              message: (message) => taskLogEvents.push(`message:${message}`),
+              success: (message) => taskLogEvents.push(`success:${message}`),
+            }
+          },
+        },
+      )
+
+      expect(cancellations).toEqual([
+        `Error: System images were not deleted: ${systemImage}\nWarning: Failed to find package ${systemImage}`,
+      ])
+      expect(taskLogEvents).toEqual([
+        'start:Deleting Android system images',
+        `message:Warning: Failed to find package ${systemImage}\n`,
+        `error:System images were not deleted: ${systemImage}\nWarning: Failed to find package ${systemImage}`,
+      ])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
       await rm(rootDirectory, { force: true, recursive: true })
     }
   })
