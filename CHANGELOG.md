@@ -1,5 +1,20 @@
 # solana-mobile
 
+## 0.5.0
+
+### Minor Changes
+
+- fb81a23: `emulator create` and `emulator images install` now default to an API level 36 system image instead of the newest one Google ships, and the prompt lists every Google Play image for the host with the default first. The newest image is not always one that boots: the current `android-37.0` image kernel-panics on some Windows hosts. The `--all` flag is gone since the prompt already shows everything, and an installed SDK platform is no longer required to install an image.
+
+### Patch Changes
+
+- c9bb312: `doctor` no longer reports `emulator`, `avdmanager` or `sdkmanager` as available when the file exists but cannot be run. It now warns with the error, which is what `emulator create` would hit.
+- e420981: `doctor` reported `sdkmanager` and `avdmanager` as not runnable on machines where they work: both exit non-zero on `-version`. Only a tool that fails to start is reported that way now.
+- d445378: Make `emulator images delete` work on Windows. The removal is confirmed by the images being gone from disk instead of the tool's exit code, so the Android CLI crashing on exit after a successful `sdk remove` no longer reports a failure. A clean exit that leaves an image behind now fails with the tool's output.
+- 136175b: Fail `emulator images install` and `emulator create` when the installer exits cleanly without putting the system image on disk, and show the installer's output in the error. `sdkmanager` warns and exits 0 for a package it cannot find, which previously reported the install as done.
+- 10e8ba7: Make `doctor` and `emulator images install` work on Windows. `doctor` now finds npm and the other `.cmd`/`.bat` tools. `emulator create` and `emulator images install` read the available system images from Google's repository feed and confirm an install by the image landing on disk, so the Android CLI crashing on exit no longer fails them.
+- 01bd9a8: Fix the `emulator` commands on Windows. `emulator create`, `emulator delete` and `emulator images` looked for `avdmanager` and `sdkmanager` under their POSIX names, so on Windows they reported the Command-line Tools as missing even when installed; they now resolve the `.bat` launchers and run them through `cmd.exe`, and `emulator start` launches `emulator.exe`. The Android SDK root also defaults to `%LOCALAPPDATA%\Android\Sdk` on Windows and `~/Android/Sdk` on Linux instead of the macOS path everywhere, and `ANDROID_HOME` now takes precedence over the deprecated `ANDROID_SDK_ROOT`, matching Android Studio and the `doctor` command. The `doctor` command no longer reports a tool as available on Windows when only its extensionless shell script is present.
+
 ## 0.4.0
 
 ### Minor Changes
