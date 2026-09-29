@@ -12,6 +12,7 @@ import { createDoctorCommand, type DoctorCommandDeps } from './doctor/doctor-fea
 import { createEmulatorCommand, type EmulatorCommandDeps } from './emulator/emulator-feature.ts'
 import { createLocalnetCommand, type LocalnetCommandDeps } from './localnet/localnet-feature.ts'
 import { createPlaygroundCommand, type PlaygroundCommandDeps } from './playground/playground-feature.ts'
+import { createReleaseCommand, type ReleaseCommandDeps } from './release/release-feature.ts'
 import { createTemplatesCommand, type TemplatesCommandDeps } from './templates/templates-feature.ts'
 import { createWebshellCommand, type WebshellCommandDeps } from './webshell/webshell-feature.ts'
 
@@ -21,6 +22,7 @@ export type AppOptions = CreateCommandDeps &
   EmulatorCommandDeps &
   LocalnetCommandDeps &
   PlaygroundCommandDeps &
+  ReleaseCommandDeps &
   TemplatesCommandDeps &
   WebshellCommandDeps & {
     checkForNewerVersion?: (options: VersionCheckOptions) => Promise<VersionCheckResult | undefined>
@@ -62,6 +64,7 @@ export function createApp(appOptions: AppOptions = {}) {
   app.addCommand(createEmulatorCommand(appOptions))
   app.addCommand(createLocalnetCommand(appOptions))
   app.addCommand(createPlaygroundCommand(appOptions))
+  app.addCommand(createReleaseCommand(appOptions))
   app.addCommand(createTemplatesCommand(appOptions))
   app.addCommand(createWebshellCommand(appOptions))
 
