@@ -10,6 +10,7 @@ CLI for Solana Mobile development.
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, stop, and tune local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
+- **Release checks** — check that an Expo project is ready to be built and published on the Solana dApp Store
 - **Template repository checks** — verify that a template repository's generated artifacts are up to date
 - **Webshell projects** — wrap an existing web app or PWA in a native Android WebView project and build it to an APK
 
@@ -352,6 +353,35 @@ workflows.
 
 The command is diagnostic only and never installs or modifies dependencies. Missing required dependencies produce
 exit code `1`; warnings do not.
+
+### Check an app for a dApp Store release
+
+```bash
+# Check the Expo project in the current directory
+npx solana-mobile release check
+
+# Check an app in a monorepo subdirectory
+npx solana-mobile release check apps/mobile
+
+# Print a stable JSON report, or include diagnostic details
+npx solana-mobile release check --json
+npx solana-mobile release check --verbose
+```
+
+Checks an Expo project against what a Solana dApp Store release needs: an app name, a real `android.package` (not the
+`com.anonymous.*` placeholder), `version`, a positive whole-number `android.versionCode`, and icon files that exist.
+The app config is resolved with the project's own `expo config`, so `app.config.ts` is evaluated the way prebuild
+evaluates it; without installed dependencies only a static `app.json` can be read.
+
+Whenever `android/` exists, its `android/app/build.gradle` is read too, since that is what Gradle builds. A release
+build type signed with the debug key fails the check, because the dApp Store rejects debug-signed APKs; one signed by
+a config plugin passes. If git does not ignore `android/`, prebuild leaves it alone, so an `applicationId`,
+`versionName` or `versionCode` that differs from the app config fails. If git ignores it, the directory is the output
+of the last prebuild, and a difference only warns that it is stale. Before prebuild has run, the check warns that the
+default template signs release builds with the debug key unless a config plugin changes it.
+
+The command is read-only: it never installs dependencies, runs prebuild or edits the project. A failed check produces
+exit code `1`; warnings do not, but they keep the report from ending in the green verdict.
 
 ### Check a template repository
 
