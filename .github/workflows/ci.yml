@@ -73,6 +73,11 @@ jobs:
       - name: Lint
         run: bun lint
 
+      - name: Check playground page is up to date
+        run: |
+          bun run build:playground
+          git diff --exit-code -- src/playground/web/playground-page.generated.ts
+
   test-matrix:
     name: test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

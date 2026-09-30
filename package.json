@@ -51,7 +51,7 @@
     "url": "git+https://github.com/solana-mobile/solana-mobile-cli.git"
   },
   "scripts": {
-    "build": "bun run build:playground && tsdown",
+    "build": "tsdown",
     "build:playground": "bun scripts/build-playground-page.ts",
     "changeset": "changeset",
     "check-types": "tsc -b --noEmit",
