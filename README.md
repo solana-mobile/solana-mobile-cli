@@ -366,6 +366,9 @@ npx solana-mobile release check apps/mobile
 # Print a stable JSON report, or include diagnostic details
 npx solana-mobile release check --json
 npx solana-mobile release check --verbose
+
+# Also check the APK you are about to submit
+npx solana-mobile release check --apk android/app/build/outputs/apk/release/app-release.apk
 ```
 
 Checks an Expo project against what a Solana dApp Store release needs: an app name, a real `android.package` (not the
@@ -379,6 +382,13 @@ a config plugin passes. If git does not ignore `android/`, prebuild leaves it al
 `versionName` or `versionCode` that differs from the app config fails. If git ignores it, the directory is the output
 of the last prebuild, and a difference only warns that it is stale. Before prebuild has run, the check warns that the
 default template signs release builds with the debug key unless a config plugin changes it.
+
+With `--apk`, the built APK is checked as well, since it is what the dApp Store receives: its package, `versionName`
+and `versionCode` must match the app config, it must not be debuggable, and `apksigner verify` must accept its
+signature and show a signer other than the Android debug certificate. The signer and its SHA-256 digest are listed
+with `--verbose`. This replaces the reading of the project's signing config. It needs `aapt2` (or `aapt`) and
+`apksigner` from the Android SDK Build-Tools, found under `ANDROID_HOME` or on `PATH`; a relative `--apk` path is
+relative to the current directory.
 
 The command is read-only: it never installs dependencies, runs prebuild or edits the project. A failed check produces
 exit code `1`; warnings do not, but they keep the report from ending in the green verdict.

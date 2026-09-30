@@ -4,9 +4,20 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createApp } from '../src/app.ts'
 import type { CommandRunner } from '../src/core/data-access/command-types.ts'
+import {
+  findApkTools,
+  inspectApk,
+  isDebugCertificate,
+  parseApkBadging,
+  parseApkSigners,
+} from '../src/release/data-access/inspect-apk.ts'
 import { parseAndroidGradle } from '../src/release/data-access/read-android-gradle.ts'
 import { findInstalledExpoCli, readExpoProject } from '../src/release/data-access/read-expo-project.ts'
-import type { ReleaseCheckCommandOptions, ReleaseReport } from '../src/release/data-access/release-types.ts'
+import type {
+  ApkInspection,
+  ReleaseCheckCommandOptions,
+  ReleaseReport,
+} from '../src/release/data-access/release-types.ts'
 import { type RunReleaseCheckDependencies, runReleaseCheck } from '../src/release/release-feature-check.ts'
 import { formatReleaseReport } from '../src/release/ui/release-ui-report.ts'
 
@@ -66,6 +77,17 @@ function ignoredRunner(calls: string[][] = []): CommandRunner {
     calls.push([...cmd])
     return ''
   }
+}
+
+/** Runs `run` against a project that passes every check, like `writeReleaseProject`. */
+async function withReleaseProject<T>(appJson: object | undefined, run: (root: string) => Promise<T>): Promise<T> {
+  let result: T | undefined
+  await withTempDir(async (root) => {
+    await writeReleaseProject(root, appJson)
+    result = await run(root)
+  })
+
+  return result as T
 }
 
 async function withTempDir(run: (directory: string) => Promise<void>) {
@@ -253,6 +275,177 @@ android {
   test('reports a release signing config it cannot resolve', () => {
     const source = 'android { buildTypes { release { signingConfig findSigningConfig() } } }'
     expect(parseAndroidGradle(source).releaseSigning).toBe('unknown')
+  })
+})
+
+/** `aapt2 dump badging` output of a release build, trimmed to the lines the parser reads. */
+const releaseBadging = `package: name='com.example.app' versionCode='3' versionName='1.2.0' platformBuildVersionName='16' compileSdkVersion='36'
+sdkVersion:'24'
+targetSdkVersion:'36'
+application-label:'My App'
+`
+
+/** `apksigner verify --print-certs` output for an APK signed with one release key. */
+const releaseSigners = `Signer #1 certificate DN: CN=Example, O=Example Inc., C=US
+Signer #1 certificate SHA-256 digest: 563d73d9d4bb06941c90a4f6e2b8657f0602c55c6cda904a681f355091823c10
+Signer #1 certificate SHA-1 digest: ead52a452ae28fe7544fdbed95f4b35df23c19a2
+`
+
+function apkInspection(overrides: Partial<ApkInspection> = {}): ApkInspection {
+  return {
+    badging: { debuggable: false, packageName: 'com.example.app', versionCode: 3, versionName: '1.2.0' },
+    exists: true,
+    missingTools: [],
+    path: '/builds/app-release.apk',
+    signers: [{ dn: 'CN=Example, O=Example Inc., C=US', sha256: '563d73d9' }],
+    ...overrides,
+  }
+}
+
+describe('APK inspection', () => {
+  test('parses the manifest values of aapt2 dump badging', () => {
+    expect(parseApkBadging(releaseBadging)).toEqual({
+      debuggable: false,
+      packageName: 'com.example.app',
+      versionCode: 3,
+      versionName: '1.2.0',
+    })
+    expect(parseApkBadging(`${releaseBadging}application-debuggable\n`).debuggable).toBe(true)
+  })
+
+  test('parses every signer of apksigner verify --print-certs', () => {
+    const output = `${releaseSigners}Signer #2 certificate DN: CN=Android Debug, O=Android, C=US\nSigner #2 certificate SHA-256 digest: abc123\n`
+
+    expect(parseApkSigners(output)).toEqual([
+      {
+        dn: 'CN=Example, O=Example Inc., C=US',
+        sha256: '563d73d9d4bb06941c90a4f6e2b8657f0602c55c6cda904a681f355091823c10',
+      },
+      { dn: 'CN=Android Debug, O=Android, C=US', sha256: 'abc123' },
+    ])
+  })
+
+  test('parses the per-scheme signers of apksigner from Build-Tools 35 and later', () => {
+    const output = `V2 Signer: certificate DN: CN=Android Debug, O=Android, C=US
+V2 Signer: certificate SHA-256 digest: 40a294243c1ba8b20babbb3ed724c2fabb998b3e18bfa9737e82ed5b8364c43c
+V2 Signer: certificate SHA-1 digest: 5e1c6a8f
+V3.0 Signer: certificate DN: CN=Android Debug, O=Android, C=US
+V3.0 Signer: certificate SHA-256 digest: 40a294243c1ba8b20babbb3ed724c2fabb998b3e18bfa9737e82ed5b8364c43c
+`
+    const signers = parseApkSigners(output)
+
+    expect(signers).toEqual([
+      {
+        dn: 'CN=Android Debug, O=Android, C=US',
+        sha256: '40a294243c1ba8b20babbb3ed724c2fabb998b3e18bfa9737e82ed5b8364c43c',
+      },
+    ])
+    expect(signers.some(isDebugCertificate)).toBe(true)
+  })
+
+  test.each([
+    ['CN=Android Debug, O=Android, C=US', true],
+    ['CN=Android Debug,O=Android,C=US', true],
+    ['CN=Android Debugger Inc., O=Example', false],
+    ['CN=Example, O=Android Debug', false],
+  ])('recognizes the debug certificate in %p', (dn, expected) => {
+    expect(isDebugCertificate({ dn })).toBe(expected)
+  })
+
+  test('prefers the newest Build-Tools under ANDROID_HOME and aapt2 over aapt', async () => {
+    const buildTools = join('/sdk', 'build-tools')
+    const available = new Set([
+      join(buildTools, '34.0.0', 'aapt2'),
+      join(buildTools, '35.0.1', 'aapt'),
+      join(buildTools, '35.0.1', 'aapt2'),
+      join(buildTools, '35.0.1', 'apksigner'),
+      join('/usr/bin', 'apksigner'),
+    ])
+    const tools = await findApkTools({
+      environment: { ANDROID_HOME: '/sdk', PATH: '/usr/bin' },
+      pathExists: async (path) => available.has(path),
+      platform: 'linux',
+      readDirectory: async (path) => (path === buildTools ? ['34.0.0', '35.0.1', 'debian'] : []),
+    })
+
+    expect(tools).toEqual({
+      aapt: join(buildTools, '35.0.1', 'aapt2'),
+      apksigner: join(buildTools, '35.0.1', 'apksigner'),
+    })
+  })
+
+  test('falls back to aapt and apksigner on PATH', async () => {
+    const available = new Set([join('/usr/bin', 'aapt'), join('/usr/bin', 'apksigner')])
+    const tools = await findApkTools({
+      environment: { PATH: '/usr/bin' },
+      pathExists: async (path) => available.has(path),
+      platform: 'linux',
+      readDirectory: async () => [],
+    })
+
+    expect(tools).toEqual({ aapt: join('/usr/bin', 'aapt'), apksigner: join('/usr/bin', 'apksigner') })
+  })
+
+  test('reports the tools it cannot find instead of throwing', async () => {
+    const inspection = await inspectApk('/builds/app.apk', {
+      environment: { PATH: '/nowhere' },
+      pathExists: async (path) => path === '/builds/app.apk',
+      platform: 'linux',
+      readDirectory: async () => [],
+    })
+
+    expect(inspection).toEqual({ exists: true, missingTools: ['aapt2', 'apksigner'], path: '/builds/app.apk' })
+  })
+
+  test('reads the APK with the tools it found', async () => {
+    const calls: string[][] = []
+    const available = new Set(['/builds/app.apk', join('/usr/bin', 'aapt2'), join('/usr/bin', 'apksigner')])
+    const inspection = await inspectApk('/builds/app.apk', {
+      environment: { PATH: '/usr/bin' },
+      pathExists: async (path) => available.has(path),
+      platform: 'linux',
+      readDirectory: async () => [],
+      runCommand: async (cmd) => {
+        calls.push([...cmd])
+        return cmd[1] === 'dump' ? releaseBadging : releaseSigners
+      },
+    })
+
+    expect(calls).toEqual([
+      [join('/usr/bin', 'aapt2'), 'dump', 'badging', '/builds/app.apk'],
+      [join('/usr/bin', 'apksigner'), 'verify', '--print-certs', '/builds/app.apk'],
+    ])
+    expect(inspection.badging?.versionCode).toBe(3)
+    expect(inspection.signers?.[0]?.dn).toBe('CN=Example, O=Example Inc., C=US')
+  })
+
+  test('keeps the reason apksigner gives for a signature that does not verify', async () => {
+    const available = new Set(['/builds/app.apk', join('/usr/bin', 'aapt2'), join('/usr/bin', 'apksigner')])
+    const inspection = await inspectApk('/builds/app.apk', {
+      environment: { PATH: '/usr/bin' },
+      pathExists: async (path) => available.has(path),
+      platform: 'linux',
+      readDirectory: async () => [],
+      runCommand: async (cmd) => {
+        if (cmd[1] === 'dump') return releaseBadging
+        throw new Error(
+          'Picked up JAVA_TOOL_OPTIONS: -Dfoo=bar\nDOES NOT VERIFY\nERROR: Missing META-INF/MANIFEST.MF\n\tat com.android.apksig.ApkVerifier.verify(ApkVerifier.java:176)',
+        )
+      },
+    })
+
+    expect(inspection.signatureError).toBe('DOES NOT VERIFY\nERROR: Missing META-INF/MANIFEST.MF')
+  })
+
+  test('reports an APK that does not exist without running any tool', async () => {
+    const inspection = await inspectApk('/builds/missing.apk', {
+      pathExists: async () => false,
+      runCommand: async () => {
+        throw new Error('should not run')
+      },
+    })
+
+    expect(inspection).toEqual({ exists: false, missingTools: [], path: '/builds/missing.apk' })
   })
 })
 
@@ -558,6 +751,138 @@ describe('runReleaseCheck', () => {
       expect(output.match(/adaptive-icon\.png/g)).toHaveLength(1)
     })
   })
+
+  describe('with --apk', () => {
+    async function checkApk(inspection: ApkInspection, appJson?: object) {
+      let inspected: string | undefined
+      const result = await withReleaseProject(appJson, (root) =>
+        check(
+          { apk: 'app-release.apk', directory: root },
+          {
+            inspectApk: async (path) => {
+              inspected = path
+              return { ...inspection, path }
+            },
+          },
+        ),
+      )
+
+      return { ...result, inspected }
+    }
+
+    test('checks the APK instead of guessing the signing config', async () => {
+      const { exitCode, inspected, report } = await checkApk(apkInspection())
+
+      expect(inspected).toBe(join(process.cwd(), 'app-release.apk'))
+      expect(exitCode).toBe(0)
+      expect(report?.project.apk).toBe(inspected)
+      expect(statuses(report)).toMatchObject({
+        APK: 'info',
+        'APK package': 'pass',
+        'APK signature': 'pass',
+        'APK version code': 'pass',
+        'APK version name': 'pass',
+      })
+      expect(statuses(report)['Release signing']).toBeUndefined()
+      expect(report?.checks.find(({ name }) => name === 'APK signature')?.actual).toBe(
+        'signed by CN=Example, O=Example Inc., C=US',
+      )
+    })
+
+    test('fails an APK signed with the debug certificate', async () => {
+      const { exitCode, report } = await checkApk(
+        apkInspection({ signers: [{ dn: 'C=US, O=Android, CN=Android Debug', sha256: 'abc' }] }),
+      )
+
+      expect(exitCode).toBe(1)
+      expect(report?.checks.find(({ name }) => name === 'APK signature')).toMatchObject({
+        actual: 'signed with the Android debug certificate',
+        status: 'fail',
+      })
+    })
+
+    test('fails an APK whose signature does not verify', async () => {
+      const { report } = await checkApk(apkInspection({ signatureError: 'DOES NOT VERIFY', signers: undefined }))
+
+      expect(report?.checks.find(({ name }) => name === 'APK signature')).toMatchObject({
+        details: ['DOES NOT VERIFY'],
+        status: 'fail',
+      })
+    })
+
+    test('does not call a verified APK unsigned when its signer cannot be read', async () => {
+      const { exitCode, report } = await checkApk(apkInspection({ signers: [] }))
+
+      expect(exitCode).toBe(0)
+      expect(report?.checks.find(({ name }) => name === 'APK signature')).toMatchObject({
+        actual: 'apksigner verified the APK, but its signer could not be read',
+        status: 'warn',
+      })
+    })
+
+    test('reports a file that is not an APK in one row', async () => {
+      const { report } = await checkApk(
+        apkInspection({
+          badging: undefined,
+          badgingError: 'ERROR: dump failed',
+          signatureError: 'ERROR: not a ZIP archive',
+          signers: undefined,
+        }),
+      )
+
+      expect(report?.checks.filter(({ name }) => name.startsWith('APK'))).toEqual([
+        {
+          actual: `${join(process.cwd(), 'app-release.apk')} is not a readable APK`,
+          details: ['ERROR: dump failed', 'ERROR: not a ZIP archive'],
+          name: 'APK',
+          recommendation: 'Pass --apk the path of the release APK Gradle built.',
+          status: 'fail',
+        },
+      ])
+    })
+
+    test('fails an APK built from a different versionCode', async () => {
+      const { report } = await checkApk(
+        apkInspection({
+          badging: { debuggable: false, packageName: 'com.example.app', versionCode: 2, versionName: '1.2.0' },
+        }),
+      )
+
+      expect(report?.checks.find(({ name }) => name === 'APK version code')).toMatchObject({
+        actual: 'the APK has 2, the app config has 3',
+        status: 'fail',
+      })
+    })
+
+    test('fails a debuggable APK', async () => {
+      const { report } = await checkApk(
+        apkInspection({
+          badging: { debuggable: true, packageName: 'com.example.app', versionCode: 3, versionName: '1.2.0' },
+        }),
+      )
+
+      expect(statuses(report)['APK debuggable']).toBe('fail')
+    })
+
+    test('fails when the Build-Tools are missing', async () => {
+      const { exitCode, report } = await checkApk(
+        apkInspection({ badging: undefined, missingTools: ['aapt2', 'apksigner'], signers: undefined }),
+      )
+
+      expect(exitCode).toBe(1)
+      expect(report?.checks.find(({ name }) => name === 'APK tools')).toMatchObject({
+        actual: 'aapt2 and apksigner not found, so the APK could not be fully checked',
+        status: 'fail',
+      })
+      expect(statuses(report)['APK signature']).toBeUndefined()
+    })
+
+    test('fails an APK that does not exist', async () => {
+      const { report } = await checkApk({ exists: false, missingTools: [], path: '' })
+
+      expect(report?.checks.find(({ name }) => name === 'APK')?.status).toBe('fail')
+    })
+  })
 })
 
 describe('formatReleaseReport', () => {
@@ -599,6 +924,21 @@ describe('release command', () => {
     await app.parseAsync(['node', 'solana-mobile', 'release', 'check', 'apps/mobile', '--json'])
 
     expect(calls).toEqual([{ directory: 'apps/mobile', json: true }])
+  })
+
+  test('passes --apk to the check', async () => {
+    const calls: ReleaseCheckCommandOptions[] = []
+    const app = createApp({
+      checkForNewerVersion: async () => undefined,
+      runReleaseCheck: async (options) => {
+        calls.push(options)
+        return 0
+      },
+    })
+
+    await app.parseAsync(['node', 'solana-mobile', 'release', 'check', '--apk', 'build/app-release.apk'])
+
+    expect(calls).toEqual([{ apk: 'build/app-release.apk', directory: undefined }])
   })
 
   test('sets the exit code from the check', async () => {

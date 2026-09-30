@@ -18,6 +18,7 @@ export function createReleaseCommand({
   releaseCommand
     .command('check [directory]')
     .description('Check that an Expo project is ready for a dApp Store release')
+    .option('--apk <path>', 'Also check a built release APK: its package, versions and signing certificate')
     .option('--json', 'Print a stable JSON report')
     .option('--verbose', 'Include diagnostic details')
     .action(async (directory: string | undefined, options: Omit<ReleaseCheckCommandOptions, 'directory'>) => {
