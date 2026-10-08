@@ -2,14 +2,21 @@ import { access } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { CommandRunner } from '../core/data-access/command-types.ts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import { type InspectApkDependencies, inspectApk } from './data-access/inspect-apk.ts'
 import { readAndroidGradle } from './data-access/read-android-gradle.ts'
 import { type ReadExpoProjectDependencies, readExpoProject } from './data-access/read-expo-project.ts'
 import { buildReleaseReport, getReleaseCheckExitCode } from './data-access/release-checks.ts'
-import type { AndroidProjectState, ReleaseCheckCommandOptions, ReleaseReport } from './data-access/release-types.ts'
+import type {
+  AndroidProjectState,
+  ApkInspection,
+  ReleaseCheckCommandOptions,
+  ReleaseReport,
+} from './data-access/release-types.ts'
 import { formatReleaseReport } from './ui/release-ui-report.ts'
 
 export interface RunReleaseCheckDependencies extends ReadExpoProjectDependencies {
   color?: boolean
+  inspectApk?: (path: string, dependencies: InspectApkDependencies) => Promise<ApkInspection>
   pathExists?: (path: string) => Promise<boolean>
   runCommand?: CommandRunner
   writeError?: (text: string) => void
@@ -27,6 +34,7 @@ export async function runReleaseCheck(
 ): Promise<number> {
   const {
     color = Boolean(process.stdout.isTTY),
+    inspectApk: inspectApkFile = inspectApk,
     pathExists = exists,
     runCommand = runExecutable,
     writeError = (text) => process.stderr.write(text),
@@ -40,7 +48,9 @@ export async function runReleaseCheck(
     const androidDirectory = join(root, 'android')
     const android = await resolveAndroidProjectState(root, pathExists, runCommand)
     const gradle = android === 'missing' ? undefined : await readAndroidGradle(androidDirectory)
-    report = await buildReleaseReport({ android, gradle, pathExists, project })
+    // A relative --apk is relative to the caller's cwd, like the directory argument.
+    const apk = options.apk ? await inspectApkFile(resolve(options.apk), { pathExists, runCommand }) : undefined
+    report = await buildReleaseReport({ android, apk, gradle, pathExists, project })
   } catch (error) {
     writeError(`${error instanceof Error ? error.message : error}\n`)
     return 1

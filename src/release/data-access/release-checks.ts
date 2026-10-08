@@ -1,8 +1,10 @@
 import { isAbsolute, join, relative } from 'node:path'
+import { checkApk } from './apk-checks.ts'
 import { isRecord } from './read-expo-project.ts'
 import type {
   AndroidGradleConfig,
   AndroidProjectState,
+  ApkInspection,
   ExpoProject,
   ReleaseCheckResult,
   ReleaseReport,
@@ -19,13 +21,14 @@ export const RELEASE_REMINDERS = [
 
 export interface ReleaseCheckInput {
   android: AndroidProjectState
+  apk?: ApkInspection
   gradle?: AndroidGradleConfig
   pathExists: (path: string) => Promise<boolean>
   project: ExpoProject
 }
 
 export async function buildReleaseReport(input: ReleaseCheckInput): Promise<ReleaseReport> {
-  const { android, gradle, project } = input
+  const { android, apk, gradle, project } = input
   const config = project.config
   const androidConfig = isRecord(config.android) ? config.android : {}
 
@@ -38,12 +41,20 @@ export async function buildReleaseReport(input: ReleaseCheckInput): Promise<Rele
     await checkAppIcon(project, input.pathExists),
     checkNativeProject(android, gradle, project.root),
     ...(gradle ? checkNativeDrift(android, gradle, config, androidConfig) : []),
-    checkReleaseSigning(android, gradle),
+    // The APK's own signature replaces the reading of the project's signing config, which can only
+    // guess at what a config plugin or a later re-sign did.
+    ...(apk ? checkApk(apk, config, androidConfig) : [checkReleaseSigning(android, gradle)]),
   ]
 
   return {
     checks,
-    project: { android, configSource: project.configSource, framework: 'expo', root: project.root },
+    project: {
+      android,
+      ...(apk ? { apk: apk.path } : {}),
+      configSource: project.configSource,
+      framework: 'expo',
+      root: project.root,
+    },
     ready: checks.every(({ status }) => status !== 'fail'),
     reminders: RELEASE_REMINDERS,
   }

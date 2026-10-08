@@ -9,6 +9,8 @@ export interface ReleaseCheckResult {
 }
 
 export interface ReleaseCheckCommandOptions {
+  /** A built APK to check as well, relative to the cwd. */
+  apk?: string
   directory?: string
   json?: boolean
   verbose?: boolean
@@ -41,10 +43,35 @@ export interface AndroidGradleConfig {
   versionName?: string
 }
 
+/** The manifest values `aapt2 dump badging` prints for an APK. */
+export interface ApkBadging {
+  debuggable: boolean
+  packageName?: string
+  versionCode?: number
+  versionName?: string
+}
+
+export interface ApkSigner {
+  dn: string
+  sha256?: string
+}
+
+export interface ApkInspection {
+  badging?: ApkBadging
+  badgingError?: string
+  exists: boolean
+  /** Build-Tools executables that could not be found, so their part of the inspection did not run. */
+  missingTools: string[]
+  path: string
+  signatureError?: string
+  signers?: ApkSigner[]
+}
+
 export interface ReleaseReport {
   checks: ReleaseCheckResult[]
   project: {
     android: AndroidProjectState
+    apk?: string
     configSource: ExpoConfigSource
     framework: 'expo'
     root: string
