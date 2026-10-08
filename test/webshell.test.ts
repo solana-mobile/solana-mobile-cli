@@ -7,11 +7,12 @@ import { pathToFileURL } from 'node:url'
 import { createApp } from '../src/app.ts'
 import type { CommandRunner, InteractiveRunCommandOptions } from '../src/core/data-access/command-types.ts'
 import { runInteractiveExecutable } from '../src/core/data-access/run-executable.ts'
+import { resolveSigningPasswords } from '../src/core/data-access/signing-passwords.ts'
 import type { TextPrompt } from '../src/core/ui/core-ui-prompt-types.ts'
 import { applyWebshellBranding } from '../src/webshell/data-access/apply-branding.ts'
 import { copyWebshellTemplate } from '../src/webshell/data-access/copy-template.ts'
 import { findWebshellTemplateDir } from '../src/webshell/data-access/find-template-dir.ts'
-import { ensureKeystore, resolveWebshellSigningPasswords } from '../src/webshell/data-access/keystore.ts'
+import { ensureKeystore } from '../src/webshell/data-access/keystore.ts'
 import {
   readWebshellProjectConfig,
   type WebshellProjectConfig,
@@ -697,7 +698,7 @@ describe('webshell keystore', () => {
       throw new Error('prompt should not be called')
     }
 
-    const passwords = await resolveWebshellSigningPasswords({
+    const passwords = await resolveSigningPasswords({
       env: { SOLANA_MOBILE_KEY_PASSWORD: 'key-secret', SOLANA_MOBILE_KEYSTORE_PASSWORD: 'store-secret' },
       promptPassword,
     })
@@ -712,7 +713,7 @@ describe('webshell keystore', () => {
       return 'prompted-secret'
     }
 
-    const passwords = await resolveWebshellSigningPasswords({ env: {}, promptPassword })
+    const passwords = await resolveSigningPasswords({ env: {}, promptPassword })
 
     expect(messages).toEqual(['Keystore password (SOLANA_MOBILE_KEYSTORE_PASSWORD is not set)'])
     expect(passwords).toEqual({ keyPassword: 'prompted-secret', keystorePassword: 'prompted-secret' })
@@ -721,7 +722,7 @@ describe('webshell keystore', () => {
   test('a dedicated key password from the environment overrides the prompted keystore password', async () => {
     const promptPassword = async (): Promise<string | symbol> => 'prompted-secret'
 
-    const passwords = await resolveWebshellSigningPasswords({
+    const passwords = await resolveSigningPasswords({
       env: { SOLANA_MOBILE_KEY_PASSWORD: 'key-only' },
       promptPassword,
     })
@@ -733,7 +734,7 @@ describe('webshell keystore', () => {
     const cancelled = Symbol('clack:cancel')
     const promptPassword = async (): Promise<string | symbol> => cancelled
 
-    expect(await resolveWebshellSigningPasswords({ env: {}, promptPassword })).toBe(cancelled)
+    expect(await resolveSigningPasswords({ env: {}, promptPassword })).toBe(cancelled)
   })
 })
 

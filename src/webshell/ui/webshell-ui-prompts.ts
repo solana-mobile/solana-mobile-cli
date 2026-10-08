@@ -1,10 +1,10 @@
 import { confirm, log, password, text } from '@clack/prompts'
-import { resolvePromptCancellation, type TextPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import {
-  WEBSHELL_KEY_PASSWORD_ENV,
-  WEBSHELL_KEYSTORE_PASSWORD_ENV,
-  type WebshellSigningPasswords,
-} from '../data-access/keystore.ts'
+  SIGNING_KEY_PASSWORD_ENV,
+  SIGNING_KEYSTORE_PASSWORD_ENV,
+  type SigningPasswords,
+} from '../../core/data-access/signing-passwords.ts'
+import { resolvePromptCancellation, type TextPrompt } from '../../core/ui/core-ui-prompt-types.ts'
 import { validateWebshellApplicationId } from '../data-access/rename-android-package.ts'
 
 /** Google Play rejects anything above this versionCode. */
@@ -265,17 +265,17 @@ export async function resolveWebshellCreatePasswords({
   logError = log.error,
   runConfirm = confirm as ConfirmPrompt,
   runPassword = password as PasswordPrompt,
-}: ResolveWebshellCreatePasswordsDependencies = {}): Promise<WebshellSigningPasswords | symbol> {
-  const envKeyPassword = env[WEBSHELL_KEY_PASSWORD_ENV]?.trim()
-  const envKeystorePassword = env[WEBSHELL_KEYSTORE_PASSWORD_ENV]?.trim()
+}: ResolveWebshellCreatePasswordsDependencies = {}): Promise<SigningPasswords | symbol> {
+  const envKeyPassword = env[SIGNING_KEY_PASSWORD_ENV]?.trim()
+  const envKeystorePassword = env[SIGNING_KEYSTORE_PASSWORD_ENV]?.trim()
 
   // keytool -genkeypair rejects passwords shorter than 6 characters; catching env values here fails
   // before any project files are written.
   if (envKeystorePassword && envKeystorePassword.length < MIN_KEYSTORE_PASSWORD_LENGTH) {
-    throw new Error(`${WEBSHELL_KEYSTORE_PASSWORD_ENV} must be at least ${MIN_KEYSTORE_PASSWORD_LENGTH} characters.`)
+    throw new Error(`${SIGNING_KEYSTORE_PASSWORD_ENV} must be at least ${MIN_KEYSTORE_PASSWORD_LENGTH} characters.`)
   }
   if (envKeyPassword && envKeyPassword.length < MIN_KEYSTORE_PASSWORD_LENGTH) {
-    throw new Error(`${WEBSHELL_KEY_PASSWORD_ENV} must be at least ${MIN_KEYSTORE_PASSWORD_LENGTH} characters.`)
+    throw new Error(`${SIGNING_KEY_PASSWORD_ENV} must be at least ${MIN_KEYSTORE_PASSWORD_LENGTH} characters.`)
   }
 
   if (envKeystorePassword) {
