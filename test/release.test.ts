@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createApp } from '../src/app.ts'
-import type { CommandRunner } from '../src/core/data-access/command-types.ts'
+import type { CommandRunner, InteractiveRunCommandOptions } from '../src/core/data-access/command-types.ts'
 import {
   compareBuildToolsVersionsDescending,
   findApkTools,
@@ -16,9 +16,11 @@ import { parseAndroidGradle } from '../src/release/data-access/read-android-grad
 import { findInstalledExpoCli, readExpoProject } from '../src/release/data-access/read-expo-project.ts'
 import type {
   ApkInspection,
+  ReleaseBuildCommandOptions,
   ReleaseCheckCommandOptions,
   ReleaseReport,
 } from '../src/release/data-access/release-types.ts'
+import { type RunReleaseBuildDependencies, runReleaseBuild } from '../src/release/release-feature-build.ts'
 import { type RunReleaseCheckDependencies, runReleaseCheck } from '../src/release/release-feature-check.ts'
 import { formatReleaseReport } from '../src/release/ui/release-ui-report.ts'
 
@@ -960,6 +962,339 @@ describe('formatReleaseReport', () => {
   })
 })
 
+describe('runReleaseBuild', () => {
+  const apkDirectory = (root: string) => join(root, 'android', 'app', 'build', 'outputs', 'apk', 'release')
+
+  interface BuildRun {
+    cancelled: string[]
+    commands: string[][]
+    envs: (Record<string, string> | undefined)[]
+    exitCode: number
+    inspected: string[]
+    interactive: { cmd: string[]; options?: InteractiveRunCommandOptions }[]
+    output: string
+  }
+
+  /**
+   * Runs a build against `root` with every tool faked: `git check-ignore` reports `android/` as not
+   * ignored unless `ignored` is set, Gradle writes a debug-signed `app-release.apk`, prebuild writes the
+   * stock template, and apksigner `sign` writes its `--out` file. Nothing outside `root` is touched.
+   */
+  async function build(
+    root: string,
+    options: ReleaseBuildCommandOptions = {},
+    overrides: RunReleaseBuildDependencies & { ignored?: boolean; prebuildGradle?: string } = {},
+  ): Promise<BuildRun> {
+    const run: BuildRun = {
+      cancelled: [],
+      commands: [],
+      envs: [],
+      exitCode: 0,
+      inspected: [],
+      interactive: [],
+      output: '',
+    }
+    const { ignored = false, prebuildGradle: generated = prebuildGradle, ...dependencies } = overrides
+
+    run.exitCode = await runReleaseBuild(
+      { directory: root, ...options },
+      {
+        cancel: (message) => run.cancelled.push(message),
+        color: false,
+        env: { SOLANA_MOBILE_KEYSTORE_PASSWORD: 'store-secret' },
+        findApkTools: async () => ({ aapt: '/sdk/aapt2', apksigner: '/sdk/apksigner' }),
+        findExpoCli: async () => '/repo/node_modules/expo/bin/cli',
+        inspectApk: async (path) => {
+          run.inspected.push(path)
+          return apkInspection({ path })
+        },
+        intro: () => {},
+        log: () => {},
+        outro: () => {},
+        platform: 'linux',
+        runCommand: async (cmd, commandOptions) => {
+          run.commands.push([...cmd])
+          run.envs.push(commandOptions?.env)
+          if (cmd[0] === 'git') {
+            if (ignored) return ''
+            throw new Error('exit 1')
+          }
+
+          if (cmd[2] === 'config') {
+            return JSON.stringify(JSON.parse(await readFile(join(root, 'app.json'), 'utf8')).expo)
+          }
+
+          if (cmd[1] === 'sign') {
+            await writeProjectFiles(cmd[cmd.indexOf('--out') + 1] as string, {})
+            await writeFile(cmd[cmd.indexOf('--out') + 1] as string, 'signed')
+          }
+
+          return ''
+        },
+        runInteractiveCommand: async (cmd, commandOptions) => {
+          run.interactive.push({ cmd: [...cmd], options: commandOptions })
+          if (cmd.includes('prebuild')) {
+            await writeProjectFiles(root, { 'android/app/build.gradle': generated })
+          } else {
+            await writeProjectFiles(apkDirectory(root), { 'app-release.apk': 'debug-signed' })
+          }
+        },
+        writeOutput: (text) => {
+          run.output += text
+        },
+        ...dependencies,
+      },
+    )
+
+    return run
+  }
+
+  const keystoreOptions = (root: string) => ({ keystoreAlias: 'upload', keystorePath: join(root, 'release.jks') })
+
+  async function withBuildProject(run: (root: string) => Promise<void>, gradle: string | null = prebuildGradle) {
+    await withTempDir(async (root) => {
+      await writeReleaseProject(root)
+      await writeProjectFiles(root, {
+        'release.jks': 'keystore',
+        ...(gradle ? { 'android/app/build.gradle': gradle } : {}),
+      })
+      await run(root)
+    })
+  }
+
+  test('builds, signs and checks a native project', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, { ...keystoreOptions(root), stacktrace: true })
+      const output = join(apkDirectory(root), 'com.example.app-1.2.0-3.apk')
+
+      expect(run.exitCode).toBe(0)
+      expect(run.interactive).toEqual([
+        {
+          cmd: [join(root, 'android', 'gradlew'), 'assembleRelease', '--stacktrace'],
+          options: { cwd: join(root, 'android') },
+        },
+      ])
+      const signIndex = run.commands.findIndex((cmd) => cmd[1] === 'sign')
+      expect(run.commands[signIndex]).toEqual([
+        '/sdk/apksigner',
+        'sign',
+        '--ks',
+        join(root, 'release.jks'),
+        '--ks-key-alias',
+        'upload',
+        '--ks-pass',
+        'env:SOLANA_MOBILE_KEYSTORE_PASSWORD',
+        '--key-pass',
+        'env:SOLANA_MOBILE_KEY_PASSWORD',
+        '--v4-signing-enabled',
+        'false',
+        '--out',
+        output,
+        join(apkDirectory(root), 'app-release.apk'),
+      ])
+      expect(run.envs[signIndex]).toEqual({
+        SOLANA_MOBILE_KEY_PASSWORD: 'store-secret',
+        SOLANA_MOBILE_KEYSTORE_PASSWORD: 'store-secret',
+      })
+      expect(run.commands.flat()).not.toContain('store-secret')
+      expect(run.inspected).toEqual([output])
+      expect(run.output).toContain('✓ APK signature')
+    })
+  })
+
+  test('runs expo prebuild first when android/ is ignored by git', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, keystoreOptions(root), { ignored: true })
+
+      expect(run.exitCode).toBe(0)
+      expect(run.interactive[0]).toEqual({
+        cmd: ['node', '/repo/node_modules/expo/bin/cli', 'prebuild', '--platform', 'android', '--no-install'],
+        options: { cwd: root, env: { CI: '1' } },
+      })
+      expect(run.interactive[1]?.cmd).toEqual([join(root, 'android', 'gradlew'), 'assembleRelease'])
+    })
+  })
+
+  test('runs expo prebuild when there is no android/ yet', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, keystoreOptions(root))
+
+      expect(run.exitCode).toBe(0)
+      expect(run.interactive.map(({ cmd }) => cmd[2])).toEqual(['prebuild', undefined])
+    }, null)
+  })
+
+  test("needs the project's Expo CLI to run prebuild", async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, keystoreOptions(root), { findExpoCli: async () => undefined })
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled[0]).toContain("expo prebuild needs the project's Expo CLI")
+      expect(run.interactive).toEqual([])
+    }, null)
+  })
+
+  test('uses the Gradle signature when a config plugin signs release builds', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root)
+      const output = join(apkDirectory(root), 'com.example.app-1.2.0-3.apk')
+
+      expect(run.exitCode).toBe(0)
+      expect(run.commands.some((cmd) => cmd[1] === 'sign')).toBe(false)
+      expect(run.inspected).toEqual([output])
+    }, releaseSignedGradle)
+  })
+
+  test('refuses to build a debug-signed release without a keystore', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root)
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled[0]).toContain('The release build type is signed with the debug key.')
+      expect(run.interactive).toEqual([])
+    })
+  })
+
+  test('checks the signing config prebuild generates before running Gradle', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, {}, { ignored: true })
+
+      expect(run.exitCode).toBe(1)
+      expect(run.interactive.map(({ cmd }) => cmd[2])).toEqual(['prebuild'])
+    })
+  })
+
+  test('stops before building when a project check fails', async () => {
+    await withTempDir(async (root) => {
+      await writeReleaseProject(root, { expo: { ...releaseAppJson.expo, version: undefined } })
+      const run = await build(root, keystoreOptions(root))
+
+      expect(run.exitCode).toBe(1)
+      expect(run.output).toContain('✗ Version name')
+      expect(run.cancelled).toEqual(['Fix the failed checks before building a release.'])
+      expect(run.interactive).toEqual([])
+    })
+  })
+
+  test.each([
+    [{ keystorePath: 'release.jks' }, '--keystore-alias is required with --keystore-path.'],
+    [{ keystoreAlias: 'upload' }, '--keystore-path is required with --keystore-alias.'],
+  ])('rejects %p', async (options, message) => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, options)
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled).toEqual([message])
+    })
+  })
+
+  test('rejects a keystore that does not exist', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, { keystoreAlias: 'upload', keystorePath: join(root, 'missing.jks') })
+
+      expect(run.cancelled).toEqual([`Keystore ${join(root, 'missing.jks')} not found.`])
+    })
+  })
+
+  test('looks for apksigner before running Gradle', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, keystoreOptions(root), { findApkTools: async () => ({}) })
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled[0]).toContain('apksigner not found.')
+      expect(run.interactive).toEqual([])
+    })
+  })
+
+  test('stops when the password prompt is cancelled', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, keystoreOptions(root), { env: {}, promptPassword: async () => Symbol('cancel') })
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled).toEqual(['Cancelled'])
+      expect(run.interactive).toEqual([])
+    })
+  })
+
+  test('writes the APK to --out and runs gradlew.bat on Windows', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(
+        root,
+        { ...keystoreOptions(root), out: join(root, 'dist', 'app.apk') },
+        { platform: 'win32' },
+      )
+
+      expect(run.interactive[0]?.cmd[0]).toBe(join(root, 'android', 'gradlew.bat'))
+      expect(run.inspected).toEqual([join(root, 'dist', 'app.apk')])
+    })
+  })
+
+  test('fails the build when the signed APK does not pass the check', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, keystoreOptions(root), {
+        inspectApk: async (path) => apkInspection({ path, signers: [{ dn: 'CN=Android Debug, O=Android, C=US' }] }),
+      })
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled[0]).toContain('is not ready for the dApp Store.')
+    })
+  })
+
+  test('removes release APKs from an earlier build before running Gradle', async () => {
+    await withBuildProject(async (root) => {
+      await writeProjectFiles(apkDirectory(root), { 'app-release.apk': 'stale' })
+      const run = await build(root, keystoreOptions(root), {
+        runInteractiveCommand: async () => {
+          await writeProjectFiles(apkDirectory(root), { 'app-release-unsigned.apk': 'fresh' })
+        },
+      })
+
+      expect(run.exitCode).toBe(0)
+      expect(run.commands.find((cmd) => cmd[1] === 'sign')?.at(-1)).toBe(
+        join(apkDirectory(root), 'app-release-unsigned.apk'),
+      )
+    })
+  })
+
+  test('fails when the release signing config leaves the APK unsigned', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(
+        root,
+        {},
+        {
+          runInteractiveCommand: async () => {
+            await writeProjectFiles(apkDirectory(root), { 'app-release-unsigned.apk': 'unsigned' })
+          },
+        },
+      )
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled[0]).toContain('the release signing config produced no signed APK')
+      expect(run.inspected).toEqual([])
+    }, releaseSignedGradle)
+  })
+
+  test("refuses to sign Gradle's own output in place", async () => {
+    await withBuildProject(async (root) => {
+      const built = join(apkDirectory(root), 'app-release.apk')
+      const run = await build(root, { ...keystoreOptions(root), out: built })
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled).toEqual([`--out cannot be Gradle's own output ${built} when signing with a keystore.`])
+      expect(run.commands.some((cmd) => cmd[1] === 'sign')).toBe(false)
+    })
+  })
+
+  test('reports a Gradle run that leaves no release APK', async () => {
+    await withBuildProject(async (root) => {
+      const run = await build(root, keystoreOptions(root), { runInteractiveCommand: async () => {} })
+
+      expect(run.exitCode).toBe(1)
+      expect(run.cancelled).toEqual([`Gradle finished, but no release APK was found in ${apkDirectory(root)}.`])
+    })
+  })
+})
+
 describe('release command', () => {
   test('passes the directory and flags to the check', async () => {
     const calls: ReleaseCheckCommandOptions[] = []
@@ -974,6 +1309,42 @@ describe('release command', () => {
     await app.parseAsync(['node', 'solana-mobile', 'release', 'check', 'apps/mobile', '--json'])
 
     expect(calls).toEqual([{ directory: 'apps/mobile', json: true }])
+  })
+
+  test('passes the build options to the build', async () => {
+    const calls: ReleaseBuildCommandOptions[] = []
+    const app = createApp({
+      checkForNewerVersion: async () => undefined,
+      runReleaseBuild: async (options) => {
+        calls.push(options)
+        return 0
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'release',
+      'build',
+      'apps/mobile',
+      '--keystore-path',
+      'release.jks',
+      '--keystore-alias',
+      'upload',
+      '--out',
+      'dist/app.apk',
+      '--stacktrace',
+    ])
+
+    expect(calls).toEqual([
+      {
+        directory: 'apps/mobile',
+        keystoreAlias: 'upload',
+        keystorePath: 'release.jks',
+        out: 'dist/app.apk',
+        stacktrace: true,
+      },
+    ])
   })
 
   test('passes --apk to the check', async () => {

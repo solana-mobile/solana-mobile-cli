@@ -2,17 +2,17 @@ import { access } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
 import type { CommandRunner } from '../core/data-access/command-types.ts'
+import {
+  SIGNING_KEY_PASSWORD_ENV,
+  SIGNING_KEYSTORE_PASSWORD_ENV,
+  type SigningPasswords,
+} from '../core/data-access/signing-passwords.ts'
 import type { TextPrompt } from '../core/ui/core-ui-prompt-types.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { applyWebshellBranding } from './data-access/apply-branding.ts'
 import { copyWebshellTemplate } from './data-access/copy-template.ts'
 import { findWebshellTemplateDir } from './data-access/find-template-dir.ts'
-import {
-  ensureKeystore,
-  WEBSHELL_KEY_PASSWORD_ENV,
-  WEBSHELL_KEYSTORE_PASSWORD_ENV,
-  type WebshellSigningPasswords,
-} from './data-access/keystore.ts'
+import { ensureKeystore } from './data-access/keystore.ts'
 import { writeWebshellProjectConfig } from './data-access/project-config.ts'
 import { readWebshellManifest, type WebshellManifest } from './data-access/read-manifest.ts'
 import {
@@ -178,7 +178,7 @@ export async function runWebshellInit(
 
     // Resolved before any project files are written, so a cancelled password prompt leaves no
     // half-generated directory behind.
-    let keystorePasswords: WebshellSigningPasswords | undefined
+    let keystorePasswords: SigningPasswords | undefined
     if (!(await fileExists(keystorePath))) {
       const passwords = await resolvePasswords({ env })
       if (typeof passwords === 'symbol') {
@@ -235,7 +235,7 @@ export async function runWebshellInit(
       webManifestUrl: webManifest?.webManifestUrl ?? manifest?.webManifestUrl,
     })
 
-    log(`Set ${WEBSHELL_KEYSTORE_PASSWORD_ENV} and ${WEBSHELL_KEY_PASSWORD_ENV} to skip password prompts during builds`)
+    log(`Set ${SIGNING_KEYSTORE_PASSWORD_ENV} and ${SIGNING_KEY_PASSWORD_ENV} to skip password prompts during builds`)
     showOutro(`Generated ${appName} in ${targetDirectory}. Next: ${formatCommand(`webshell build ${targetDirectory}`)}`)
   } catch (error) {
     showCancel(`${error}`)
