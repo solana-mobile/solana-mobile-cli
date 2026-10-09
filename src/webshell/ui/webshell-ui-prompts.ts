@@ -16,11 +16,20 @@ export const WEBSHELL_DEFAULT_KEYSTORE_FILENAME = 'android.keystore'
 export const WEBSHELL_DEFAULT_VERSION_CODE = 1
 export const WEBSHELL_DEFAULT_VERSION_NAME = '1.0'
 
+/** The flag that supplies each prompt that can lack a default, named in the unattended error. */
+const UNATTENDED_FLAGS: Record<string, string> = {
+  'Android application ID': '--application-id',
+  'App name': '--app-name',
+  'Web app URL': '--url',
+}
+
 /** Stands in for the clack text prompt when stdin is not a terminal: each prompt's default is taken, and a prompt without one fails instead of hanging. */
 export const unattendedTextPrompt: TextPrompt = async ({ defaultValue, initialValue, message }) => {
   const value = initialValue ?? defaultValue
   if (value === undefined) {
-    throw new Error(`${message}: no default available and stdin is not a terminal. Pass it as a flag or in --manifest.`)
+    throw new Error(
+      `${message} is required: stdin is not a terminal, so pass ${UNATTENDED_FLAGS[message] ?? 'it as a flag'} or a --manifest that provides it.`,
+    )
   }
 
   return value

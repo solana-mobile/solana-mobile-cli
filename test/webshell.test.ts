@@ -1042,7 +1042,7 @@ describe('runWebshellInit', () => {
 
     const missingUrl = initDependencies({ runText: unattendedTextPrompt })
     await runWebshellInit({ directory: '/tmp/webshell-smoke' }, missingUrl.dependencies)
-    expect(missingUrl.state.cancelled).toContain('stdin is not a terminal')
+    expect(missingUrl.state.cancelled).toContain('pass --url')
     expect(missingUrl.state.copies).toEqual([])
     expect(process.exitCode).toBe(1)
     process.exitCode = previousExitCode
