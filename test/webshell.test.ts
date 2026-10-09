@@ -29,6 +29,7 @@ import type {
 import {
   deriveWebshellApplicationIdSuggestion,
   resolveWebshellCreatePasswords,
+  unattendedTextPrompt,
 } from '../src/webshell/ui/webshell-ui-prompts.ts'
 import { type RunWebshellBuildDependencies, runWebshellBuild } from '../src/webshell/webshell-feature-build.ts'
 import { type RunWebshellInitDependencies, runWebshellInit } from '../src/webshell/webshell-feature-init.ts'
@@ -1039,6 +1040,33 @@ describe('runWebshellInit', () => {
       },
     ])
     expect(state.configs[0]?.config.webManifestUrl).toBe('https://trepa.app/manifest.json')
+  })
+
+  test('takes the prompt defaults without a terminal and fails on a prompt that has none', async () => {
+    const previousExitCode = process.exitCode
+    const { dependencies, state } = initDependencies({ runText: unattendedTextPrompt })
+
+    await runWebshellInit(
+      { appName: 'Smoke', directory: '/tmp/webshell-smoke', url: 'https://app.example.com' },
+      dependencies,
+    )
+
+    expect(state.cancelled).toBeUndefined()
+    expect(state.renames[0]?.options).toMatchObject({
+      applicationId: 'com.example.app',
+      keystoreAlias: 'android',
+      keystorePath: join(smokeDirectory, 'android.keystore'),
+      versionCode: 1,
+      versionName: '1.0',
+    })
+    expect(state.configs[0]?.config.keystorePath).toBe('android.keystore')
+
+    const missingUrl = initDependencies({ runText: unattendedTextPrompt })
+    await runWebshellInit({ directory: '/tmp/webshell-smoke' }, missingUrl.dependencies)
+    expect(missingUrl.state.cancelled).toContain('pass --url')
+    expect(missingUrl.state.copies).toEqual([])
+    expect(process.exitCode).toBe(1)
+    process.exitCode = previousExitCode
   })
 
   test('exits quietly when a prompt is cancelled', async () => {

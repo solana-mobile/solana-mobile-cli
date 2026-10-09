@@ -334,7 +334,9 @@ npx solana-mobile webshell build my-app --stacktrace
 
 Every value resolves flag > manifest > prompt, so `init` also takes `--app-name`, `--application-id`,
 `--version-code`, `--version-name`, `--keystore-path`, and `--keystore-alias` (plus `--force` to overwrite a non-empty
-directory) — anything still missing is prompted for. A relative `--keystore-path` is resolved against the project
+directory) — anything still missing is prompted for. Without a terminal (CI, piped stdin) a prompt with a default
+takes it: the application id derived from the URL, version `1`/`1.0`, `android.keystore` and alias `android`; the URL
+and app name still have to come from a flag or manifest. A relative `--keystore-path` is resolved against the project
 directory, not the shell cwd. The signing keystore is created when it does not exist yet, and
 the passwords are read from `SOLANA_MOBILE_KEYSTORE_PASSWORD` and `SOLANA_MOBILE_KEY_PASSWORD` or prompted for; they
 are never stored. Building runs the project's own Gradle wrapper and requires JDK 17+ and the Android SDK — the CLI
