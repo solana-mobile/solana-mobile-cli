@@ -26,7 +26,7 @@ export function createWebshellCommand({
     .option('--application-id <id>', 'Android application id (e.g. com.example.app)')
     .option('--force', 'Overwrite an existing directory')
     .option('--keystore-alias <alias>', 'Signing keystore alias')
-    .option('--keystore-path <path>', 'Signing keystore path (created when missing)')
+    .option('--keystore-path <path>', 'Signing keystore path, relative to the project directory (created when missing)')
     .option('--manifest <path-or-url>', 'Web manifest.json or Bubblewrap twa-manifest.json')
     .option('--url <url>', 'Web app URL to wrap')
     .option('--version-code <number>', 'Android versionCode', parseIntegerOption)
