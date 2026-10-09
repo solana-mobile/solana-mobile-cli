@@ -2,16 +2,12 @@ import { access } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { CommandRunner } from '../core/data-access/command-types.ts'
 import { runExecutable } from '../core/data-access/run-executable.ts'
+import { resolveAndroidProjectState } from './data-access/android-project-state.ts'
 import { type InspectApkDependencies, inspectApk } from './data-access/inspect-apk.ts'
 import { readAndroidGradle } from './data-access/read-android-gradle.ts'
 import { type ReadExpoProjectDependencies, readExpoProject } from './data-access/read-expo-project.ts'
 import { buildReleaseReport, getReleaseCheckExitCode } from './data-access/release-checks.ts'
-import type {
-  AndroidProjectState,
-  ApkInspection,
-  ReleaseCheckCommandOptions,
-  ReleaseReport,
-} from './data-access/release-types.ts'
+import type { ApkInspection, ReleaseCheckCommandOptions, ReleaseReport } from './data-access/release-types.ts'
 import { formatReleaseReport } from './ui/release-ui-report.ts'
 
 export interface RunReleaseCheckDependencies extends ReadExpoProjectDependencies {
@@ -60,28 +56,6 @@ export async function runReleaseCheck(
     options.json ? `${JSON.stringify(report, null, 2)}\n` : `${formatReleaseReport(report, options.verbose, color)}\n`,
   )
   return getReleaseCheckExitCode(report)
-}
-
-/**
- * An `android/` directory that git ignores is a continuous native generation project, rebuilt by
- * prebuild from the app config. Outside a git repository `git check-ignore` fails, which counts as
- * not ignored, so the directory is treated as a native project.
- */
-async function resolveAndroidProjectState(
-  root: string,
-  pathExists: (path: string) => Promise<boolean>,
-  runCommand: CommandRunner,
-): Promise<AndroidProjectState> {
-  if (!(await pathExists(join(root, 'android')))) {
-    return 'missing'
-  }
-
-  try {
-    await runCommand(['git', '-C', root, 'check-ignore', '--quiet', 'android'])
-    return 'generated'
-  } catch {
-    return 'native'
-  }
 }
 
 async function exists(path: string) {

@@ -140,7 +140,7 @@ export function isDebugCertificate(signer: ApkSigner) {
  * a malformed APK with a Java stack trace; both bury the line that explains the failure, so the notice
  * and the stack frames are dropped.
  */
-function toolError(error: unknown) {
+export function toolError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
   return message
     .split('\n')

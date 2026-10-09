@@ -10,7 +10,7 @@ CLI for Solana Mobile development.
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, stop, and tune local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
-- **Release checks** — check that an Expo project is ready to be built and published on the Solana dApp Store
+- **Release builds** — check, build and sign an Expo app's release APK for the Solana dApp Store
 - **Template repository checks** — verify that a template repository's generated artifacts are up to date
 - **Webshell projects** — wrap an existing web app or PWA in a native Android WebView project and build it to an APK
 
@@ -407,6 +407,32 @@ relative to the current directory.
 
 The command is read-only: it never installs dependencies, runs prebuild or edits the project. A failed check produces
 exit code `1`; warnings do not, but they keep the report from ending in the green verdict.
+
+### Build an app for a dApp Store release
+
+```bash
+# Build, sign and check the release APK of the Expo project in the current directory
+npx solana-mobile release build --keystore-path release.jks --keystore-alias upload
+
+# Build an app in a monorepo subdirectory without password prompts
+SOLANA_MOBILE_KEYSTORE_PASSWORD=secret npx solana-mobile release build apps/mobile \
+  --keystore-path release.jks --keystore-alias upload
+
+# Write the APK somewhere else, and show Gradle's stack trace on failure
+npx solana-mobile release build --keystore-path release.jks --keystore-alias upload --out dist/app.apk --stacktrace
+```
+
+Runs the `release check` project checks first and stops on a failure. Unless git tracks `android/`, `expo prebuild`
+regenerates it from the app config (it never installs dependencies), then the project's own Gradle wrapper builds the
+release variant. With `--keystore-path` and `--keystore-alias`, `apksigner` signs the APK with that key, replacing the
+debug signature the prebuild template gives release builds; without them, the release build type has to carry its own
+signing config, for example from a config plugin. The keystore is never created for you: the dApp Store key is one to
+make deliberately. The passwords are read from `SOLANA_MOBILE_KEYSTORE_PASSWORD` and `SOLANA_MOBILE_KEY_PASSWORD` or
+prompted for, and never appear in a command line.
+
+The APK is written next to Gradle's output as `<package>-<version>-<versionCode>.apk`, or to `--out`, and is then
+checked like `release check --apk`; a failed check exits `1`. Building needs JDK 17+, the Android SDK and its
+Build-Tools; a missing toolchain surfaces as Gradle's own error.
 
 ### Check a template repository
 
