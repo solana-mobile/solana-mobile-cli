@@ -49,6 +49,9 @@ export async function applyWebshellBranding(
 
   const selectedIcon = selectPreferredManifestIcon(manifest?.icons)
   if (!selectedIcon) {
+    if (manifest?.icons?.length) {
+      logWarning('No manifest icon is a png, webp, or jpg. Using the default Android launcher icon instead.')
+    }
     return
   }
 

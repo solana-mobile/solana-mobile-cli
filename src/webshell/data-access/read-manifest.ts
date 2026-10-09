@@ -231,6 +231,11 @@ function resolveAssetUrl(value: string | undefined, baseUrl?: string): string | 
     return undefined
   }
 
+  // A root-absolute src in a local manifest means the site root, which on disk is the manifest's directory, not /.
+  if (baseUrl.startsWith('file:') && value.startsWith('/') && !value.startsWith('//')) {
+    return new URL(`.${value}`, baseUrl).toString()
+  }
+
   return new URL(value, baseUrl).toString()
 }
 
