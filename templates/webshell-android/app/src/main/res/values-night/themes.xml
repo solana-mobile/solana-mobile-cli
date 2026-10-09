@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- WebView derives prefers-color-scheme from the app theme's isLightTheme (SDK 33+), so this dark variant is what makes a page's "system" mode follow night mode. -->
+    <style name="Theme.WebShell" parent="android:Theme.Material.NoActionBar" />
+</resources>
