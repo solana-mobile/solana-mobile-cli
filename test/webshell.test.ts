@@ -135,6 +135,22 @@ describe('readWebshellManifest', () => {
     ])
   })
 
+  test('resolves a root-absolute icon src in a local manifest against the manifest directory', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'webshell-manifest-'))
+    try {
+      await writeFile(
+        join(directory, 'manifest.webmanifest'),
+        JSON.stringify({ icons: [{ sizes: '512x512', src: '/icon-512.png', type: 'image/png' }], name: 'Rooted' }),
+      )
+
+      const manifest = await readWebshellManifest(join(directory, 'manifest.webmanifest'))
+
+      expect(manifest.icons?.[0]?.src).toBe(pathToFileURL(join(directory, 'icon-512.png')).toString())
+    } finally {
+      await rm(directory, { force: true, recursive: true })
+    }
+  })
+
   test('maps the fields of a local Bubblewrap twa-manifest.json', async () => {
     const manifest = await readWebshellManifest(join(webshellFixtures, 'twa-manifest.json'))
 
@@ -560,6 +576,7 @@ describe('applyWebshellBranding', () => {
 
   test('keeps the template launcher artwork when no manifest icon is supported', async () => {
     await withGeneratedProject(async (projectDirectory) => {
+      const warnings: string[] = []
       await applyWebshellBranding(
         projectDirectory,
         {
@@ -567,8 +584,12 @@ describe('applyWebshellBranding', () => {
             { purpose: ['maskable'], sizes: [512], src: 'https://app.example.com/icon.svg', type: 'image/svg+xml' },
           ],
         },
-        { fetchFn: rejectingFetch },
+        { fetchFn: rejectingFetch, logWarning: (message) => warnings.push(message) },
       )
+
+      expect(warnings).toEqual([
+        'No manifest icon is a png, webp, or jpg. Using the default Android launcher icon instead.',
+      ])
 
       expect(
         existsSync(join(projectDirectory, 'app/src/main/res/drawable-nodpi/ic_launcher_foreground_inner.png')),
