@@ -1,5 +1,12 @@
 # solana-mobile
 
+## 0.6.1
+
+### Patch Changes
+
+- 07c6610: `webshell init`: without a terminal every prompt that has a default takes it (application id derived from the URL, version `1`/`1.0`, `android.keystore`, alias `android`) and a prompt without one fails with a message naming the flag, so CI only needs `--url` and `--app-name` or a manifest; the keystore prompt now defaults to a bare `android.keystore` relative to the project directory
+- 680d31b: `webshell init`: a root-absolute icon `src` in a local web manifest (such as `/icon-512.png`) now resolves against the manifest's directory instead of the filesystem root, and a manifest whose icons are all unsupported formats warns instead of silently keeping the default launcher icon
+
 ## 0.6.0
 
 ### Minor Changes
