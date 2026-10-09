@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { createApp, runApp } from '../src/app.ts'
 import {
@@ -466,5 +468,24 @@ describe('app', () => {
 
       expect(errors.join('')).toContain(`Usage: solana-mobile ${name}`)
     }
+  })
+})
+
+describe('cli with closed stdin', () => {
+  test('fails loudly instead of exiting 0 when a prompt is waiting for input', () => {
+    const directory = join(tmpdir(), `solana-mobile-cli-stdin-${Date.now()}`)
+    const result = spawnSync(
+      'bun',
+      ['run', 'src/cli.ts', 'webshell', 'init', directory, '--url', 'https://example.com'],
+      {
+        cwd: new URL('..', import.meta.url),
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('Input ended while a prompt was waiting')
+    expect(existsSync(directory)).toBe(false)
   })
 })
