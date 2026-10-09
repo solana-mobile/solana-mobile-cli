@@ -340,6 +340,18 @@ the passwords are read from `SOLANA_MOBILE_KEYSTORE_PASSWORD` and `SOLANA_MOBILE
 are never stored. Building runs the project's own Gradle wrapper and requires JDK 17+ and the Android SDK — the CLI
 does not install them, so a missing toolchain surfaces as Gradle's own error.
 
+The shell appends `Solana Mobile Web Shell` to the WebView user agent, so a page can tell when it runs inside the
+shell:
+
+```js
+const inWebshell = navigator.userAgent.includes('Solana Mobile Web Shell')
+if (inWebshell) {
+  // Running inside the Android shell: skip browser-only setup, use native integrations.
+} else {
+  // Running in a regular browser.
+}
+```
+
 ### Check your environment
 
 ```bash
