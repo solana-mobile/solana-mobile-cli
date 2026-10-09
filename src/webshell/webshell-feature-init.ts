@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
+import { cancel, log as clackLog, intro, outro, text } from '@clack/prompts'
 import type { CommandRunner } from '../core/data-access/command-types.ts'
 import type { TextPrompt } from '../core/ui/core-ui-prompt-types.ts'
 import { formatCliCommand } from '../core/util/format-cli-command.ts'
@@ -32,6 +32,7 @@ import {
   promptWebshellVersionCode,
   promptWebshellVersionName,
   resolveWebshellCreatePasswords,
+  unattendedTextPrompt,
   WEBSHELL_DEFAULT_KEYSTORE_FILENAME,
 } from './ui/webshell-ui-prompts.ts'
 
@@ -60,7 +61,7 @@ export interface RunWebshellInitDependencies {
 /**
  * Generates an Android WebView-shell project for a web app. Every value resolves flag > manifest >
  * prompt, so a fully flagged invocation (or one seeded by a complete Bubblewrap manifest) never
- * prompts — that is what lets CI drive it.
+ * prompts. Without a terminal, prompts that have a default take it, so CI only has to pass the rest.
  */
 export async function runWebshellInit(
   options: WebshellInitCommandOptions = {},
@@ -83,7 +84,7 @@ export async function runWebshellInit(
     renamePackage = renameAndroidPackage,
     resolvePasswords = resolveWebshellCreatePasswords,
     runCommand,
-    runText,
+    runText = process.stdin.isTTY ? (text as TextPrompt) : unattendedTextPrompt,
     warn = clackLog.warn,
     writeProjectConfig = writeWebshellProjectConfig,
   } = dependencies
@@ -161,7 +162,7 @@ export async function runWebshellInit(
     const enteredKeystorePath =
       trimmedOrUndefined(options.keystorePath) ??
       resolveManifestKeystorePath(manifest) ??
-      (await promptWebshellKeystorePath(join(targetDirectory, WEBSHELL_DEFAULT_KEYSTORE_FILENAME), runText))
+      (await promptWebshellKeystorePath(WEBSHELL_DEFAULT_KEYSTORE_FILENAME, runText))
     if (enteredKeystorePath === undefined) {
       return
     }

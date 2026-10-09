@@ -476,7 +476,8 @@ describe('cli with closed stdin', () => {
     const directory = join(tmpdir(), `solana-mobile-cli-stdin-${Date.now()}`)
     const result = spawnSync(
       'bun',
-      ['run', 'src/cli.ts', 'webshell', 'init', directory, '--url', 'https://example.com'],
+      // Without a terminal every prompt with a default takes it, so the keystore password prompt is what waits.
+      ['run', 'src/cli.ts', 'webshell', 'init', directory, '--app-name', 'Example', '--url', 'https://example.com'],
       {
         cwd: new URL('..', import.meta.url),
         encoding: 'utf8',
