@@ -1022,6 +1022,7 @@ describe('runWebshellInit', () => {
   })
 
   test('takes the prompt defaults without a terminal and fails on a prompt that has none', async () => {
+    const previousExitCode = process.exitCode
     const { dependencies, state } = initDependencies({ runText: unattendedTextPrompt })
 
     await runWebshellInit(
@@ -1043,6 +1044,8 @@ describe('runWebshellInit', () => {
     await runWebshellInit({ directory: '/tmp/webshell-smoke' }, missingUrl.dependencies)
     expect(missingUrl.state.cancelled).toContain('stdin is not a terminal')
     expect(missingUrl.state.copies).toEqual([])
+    expect(process.exitCode).toBe(1)
+    process.exitCode = previousExitCode
   })
 
   test('exits quietly when a prompt is cancelled', async () => {
