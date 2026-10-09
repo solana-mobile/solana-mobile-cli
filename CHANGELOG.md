@@ -1,5 +1,17 @@
 # solana-mobile
 
+## 0.6.0
+
+### Minor Changes
+
+- 050349d: `release check` takes `--apk <path>` to check the built APK too: its package, version name and versionCode must match the app config, it must not be debuggable, and its signature must verify with a certificate other than the Android debug one. It uses `aapt2` and `apksigner` from the Android SDK Build-Tools.
+- 88c3279: Add `release check [directory]`, which checks that an Expo project is ready for a Solana dApp Store release: app name, Android package, version name, versionCode, icons, and, whenever `android/` exists, that its release build is not signed with the debug key and that Gradle's values match the app config. It defaults to the current directory, takes `--json` and `--verbose`, and never modifies the project.
+
+### Patch Changes
+
+- 25ac7ad: Exit with code 1 and a message when a prompt is waiting for input and stdin closes, instead of exiting 0 silently as if the command had succeeded
+- e2f5e75: Ship a `values-night` theme variant in the webshell template so a wrapped page's "system" dark mode follows Android night mode
+
 ## 0.5.0
 
 ### Minor Changes
