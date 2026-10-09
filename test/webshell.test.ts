@@ -1116,6 +1116,10 @@ describe('runWebshellInit', () => {
       expect(gradleProperties).toContain('SOLANA_MOBILE_VERSION_NAME=1.1')
       expect(existsSync(join(projectDirectory, 'app/src/main/java/com/example/trepa/MainActivity.kt'))).toBe(true)
 
+      // The night theme variant is what lets WebView report prefers-color-scheme: dark (SDK 33+).
+      const nightTheme = await readFile(join(projectDirectory, 'app/src/main/res/values-night/themes.xml'), 'utf8')
+      expect(nightTheme).toContain('<style name="Theme.WebShell" parent="android:Theme.Material.NoActionBar" />')
+
       // The app name came from the manifest's short_name.
       const strings = await readFile(join(projectDirectory, 'app/src/main/res/values/strings.xml'), 'utf8')
       expect(strings).toContain('<string name="app_name">Trepa</string>')
