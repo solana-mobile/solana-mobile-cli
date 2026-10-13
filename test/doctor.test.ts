@@ -225,7 +225,7 @@ describe('adb devices parsing', () => {
       [],
     )
     expect(checks.find(({ name }) => name === 'Android emulators')?.recommendation).toBe(
-      'Create one with: npx solana-mobile emulator create',
+      'Create one with: npx solana-mobile@latest emulator create',
     )
   })
   test('reports unauthorized physical devices with a specific recommendation', async () => {

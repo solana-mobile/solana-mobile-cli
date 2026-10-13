@@ -34,7 +34,7 @@ describe('core', () => {
         npm_command: 'exec',
         npm_lifecycle_event: 'npx',
       }),
-    ).toBe('npx solana-mobile emulator stop Alpha')
+    ).toBe('npx solana-mobile@latest emulator stop Alpha')
   })
 
   test('formats bunx CLI commands', () => {
@@ -43,7 +43,7 @@ describe('core', () => {
         npm_command: 'exec',
         npm_lifecycle_event: 'bunx',
       }),
-    ).toBe('bunx solana-mobile emulator stop Alpha')
+    ).toBe('bunx solana-mobile@latest emulator stop Alpha')
   })
 
   test('formats pnpm dlx CLI commands', () => {
@@ -51,7 +51,7 @@ describe('core', () => {
       formatCliCommand('emulator stop Alpha', {
         npm_config_user_agent: 'pnpm/10.33.0 npm/? node/v24.5.0 darwin arm64',
       }),
-    ).toBe('pnpm dlx solana-mobile emulator stop Alpha')
+    ).toBe('pnpm dlx solana-mobile@latest emulator stop Alpha')
   })
 
   test('formats yarn dlx CLI commands', () => {
@@ -59,7 +59,7 @@ describe('core', () => {
       formatCliCommand('emulator stop Alpha', {
         npm_config_user_agent: 'yarn/4.9.2 npm/? node/v24.5.0 darwin arm64',
       }),
-    ).toBe('yarn dlx solana-mobile emulator stop Alpha')
+    ).toBe('yarn dlx solana-mobile@latest emulator stop Alpha')
   })
 
   test('does not treat pnpm exec as pnpm dlx', () => {
