@@ -10,7 +10,7 @@ CLI for Solana Mobile development.
 - **Doctor checks** — local dependency checks with recommendations
 - **Emulator helpers** — create, delete, list, start, status, stop, and tune local Android emulators
 - **Local validator** — run surfpool or solana-test-validator in Docker and forward it to every connected device
-- **Release checks** — check that an Expo project is ready to be built and published on the Solana dApp Store
+- **Release builds** — check, build and sign an Expo app's release APK for the Solana dApp Store
 - **Template repository checks** — verify that a template repository's generated artifacts are up to date
 - **Webshell projects** — wrap an existing web app or PWA in a native Android WebView project and build it to an APK
 
@@ -19,9 +19,9 @@ CLI for Solana Mobile development.
 Run the CLI without installing it:
 
 ```bash
-bun x solana-mobile --help
-npx solana-mobile --help
-pnpx solana-mobile --help
+bun x solana-mobile@latest --help
+npx solana-mobile@latest --help
+pnpx solana-mobile@latest --help
 ```
 
 Examples below use `npx`; replace it with `pnpx` or `bun x` if you prefer pnpm or Bun.
@@ -30,67 +30,67 @@ Examples below use `npx`; replace it with `pnpx` or `bun x` if you prefer pnpm o
 
 ```bash
 # Create or update an emulator, installing a system image when needed
-npx solana-mobile emulator create
+npx solana-mobile@latest emulator create
 
 # Create or update a named emulator
-npx solana-mobile emulator create local_phone --device pixel_9
+npx solana-mobile@latest emulator create local_phone --device pixel_9
 
 # Delete by choosing from installed emulators
-npx solana-mobile emulator delete
+npx solana-mobile@latest emulator delete
 
 # Delete emulators by name
-npx solana-mobile emulator delete local_phone
+npx solana-mobile@latest emulator delete local_phone
 
 # Delete Android system images by choosing from installed images
-npx solana-mobile emulator images delete
+npx solana-mobile@latest emulator images delete
 
 # Delete specific Android system images
-npx solana-mobile emulator images delete system-images/android-35/google_apis_playstore/arm64-v8a
+npx solana-mobile@latest emulator images delete system-images/android-35/google_apis_playstore/arm64-v8a
 
 # Install an Android system image, choosing from the available ones
-npx solana-mobile emulator images install
+npx solana-mobile@latest emulator images install
 
 # Install a specific Android system image
-npx solana-mobile emulator images install system-images/android-36.1/google_apis_playstore/arm64-v8a
+npx solana-mobile@latest emulator images install system-images/android-36.1/google_apis_playstore/arm64-v8a
 
 # List installed Android system images
-npx solana-mobile emulator images list
+npx solana-mobile@latest emulator images list
 
 # List installed emulators
-npx solana-mobile emulator list
+npx solana-mobile@latest emulator list
 
 # Start by choosing from installed emulators
-npx solana-mobile emulator start
+npx solana-mobile@latest emulator start
 
 # Start an emulator by name
-npx solana-mobile emulator start local_phone
+npx solana-mobile@latest emulator start local_phone
 
 # Start an emulator and apply every agent-friendly tweak after boot, without prompting
-npx solana-mobile emulator start local_phone --tune
+npx solana-mobile@latest emulator start local_phone --tune
 
 # Show status for all installed and running emulators
-npx solana-mobile emulator status
+npx solana-mobile@latest emulator status
 
 # Show status for one emulator by name or serial
-npx solana-mobile emulator status local_phone
+npx solana-mobile@latest emulator status local_phone
 
 # Stop by choosing from running emulators
-npx solana-mobile emulator stop
+npx solana-mobile@latest emulator stop
 
 # Stop a running emulator by name or serial
-npx solana-mobile emulator stop local_phone
+npx solana-mobile@latest emulator stop local_phone
 
 # Tune by choosing from running emulators, then pick the tweaks to apply
-npx solana-mobile emulator tune
+npx solana-mobile@latest emulator tune
 
 # Tune a running emulator by name or serial
-npx solana-mobile emulator tune local_phone
+npx solana-mobile@latest emulator tune local_phone
 
 # Apply every tweak without prompting
-npx solana-mobile emulator tune local_phone --yes
+npx solana-mobile@latest emulator tune local_phone --yes
 
 # Use the short alias
-npx solana-mobile emu list
+npx solana-mobile@latest emu list
 ```
 
 ### Work with connected devices
@@ -100,32 +100,32 @@ device with `adb reverse` first, so a dev server on this computer opens on a USB
 
 ```bash
 # List connected devices and emulators, with names and states
-npx solana-mobile device list
+npx solana-mobile@latest device list
 
 # List as JSON
-npx solana-mobile device list --json
+npx solana-mobile@latest device list --json
 
 # Open by choosing from the URLs the device can already reach; devices with several
 # connected pick from a list, a single device is used directly
-npx solana-mobile device open
+npx solana-mobile@latest device open
 
 # Open a URL in the device browser
-npx solana-mobile device open http://localhost:18488/
+npx solana-mobile@latest device open http://localhost:18488/
 
 # Open a dev server by port
-npx solana-mobile device open 3000
+npx solana-mobile@latest device open 3000
 
 # Open a deep link (quoted so the shell does not glob the ?)
-npx solana-mobile device open 'myapp://claim?id=123'
+npx solana-mobile@latest device open 'myapp://claim?id=123'
 
 # Target a specific device
-npx solana-mobile device open 3000 --device SM02E4072816572
+npx solana-mobile@latest device open 3000 --device SM02E4072816572
 
 # Open without creating an adb reverse for localhost URLs
-npx solana-mobile device open 3000 --no-forward
+npx solana-mobile@latest device open 3000 --no-forward
 
 # Explain URL and port forwarding decisions
-npx solana-mobile device open 3000 --verbose
+npx solana-mobile@latest device open 3000 --verbose
 ```
 
 ### Tune a device for automation
@@ -139,16 +139,16 @@ phone with a screen lock keeps its lock screen) are reported as skipped instead 
 
 ```bash
 # Tune the connected device; several connected pick from a list
-npx solana-mobile device tune
+npx solana-mobile@latest device tune
 
 # Tune a specific device
-npx solana-mobile device tune --device SM02E4072816572
+npx solana-mobile@latest device tune --device SM02E4072816572
 
 # Tune every connected device and emulator
-npx solana-mobile device tune --all
+npx solana-mobile@latest device tune --all
 
 # Apply every tweak without prompting, for unattended runs
-npx solana-mobile device tune --device SM02E4072816572 --yes
+npx solana-mobile@latest device tune --device SM02E4072816572 --yes
 ```
 
 ### Install APKs
@@ -159,25 +159,25 @@ repeat installs skip the network. Installs continue past failures and report a s
 
 ```bash
 # Pick catalog APKs from a list
-npx solana-mobile device install
+npx solana-mobile@latest device install
 
 # Install a catalog APK by name
-npx solana-mobile device install fakewallet
+npx solana-mobile@latest device install fakewallet
 
 # Install local APK files and every .apk in a directory
-npx solana-mobile device install app.apk ./builds/
+npx solana-mobile@latest device install app.apk ./builds/
 
 # Install on every connected device
-npx solana-mobile device install fakewallet --all
+npx solana-mobile@latest device install fakewallet --all
 
 # Allow version downgrades and grant all runtime permissions
-npx solana-mobile device install app.apk --downgrade --grant
+npx solana-mobile@latest device install app.apk --downgrade --grant
 
 # Re-download a catalog APK even when cached
-npx solana-mobile device install fakewallet --force
+npx solana-mobile@latest device install fakewallet --force
 
 # List the APKs available in the catalog
-npx solana-mobile device install --list
+npx solana-mobile@latest device install --list
 ```
 
 ### Run a local validator
@@ -187,29 +187,29 @@ against localnet instead of devnet.
 
 ```bash
 # Start a validator, forward it to every connected device, and keep the forwards alive
-npx solana-mobile localnet
+npx solana-mobile@latest localnet
 
 # Leave it running in the background
-npx solana-mobile localnet start --detach
+npx solana-mobile@latest localnet start --detach
 
 # Use solana-test-validator instead of surfpool
-npx solana-mobile localnet start --engine test-validator
+npx solana-mobile@latest localnet start --engine test-validator
 
 # Forward an already-running validator without starting one
-npx solana-mobile localnet forward
+npx solana-mobile@latest localnet forward
 
 # Verify the validator is reachable from every device
-npx solana-mobile localnet check
-npx solana-mobile localnet check --json
+npx solana-mobile@latest localnet check
+npx solana-mobile@latest localnet check --json
 
 # Show the validator and port forward status
-npx solana-mobile localnet status
+npx solana-mobile@latest localnet status
 
 # Print validator logs
-npx solana-mobile localnet logs
+npx solana-mobile@latest localnet logs
 
 # Stop the validator and remove its port forwards
-npx solana-mobile localnet stop
+npx solana-mobile@latest localnet stop
 ```
 
 The default engine is [surfpool](https://github.com/txtx/surfpool); `--engine test-validator` runs
@@ -227,7 +227,7 @@ This is what makes working on a validator itself practical: run your build, then
 
 ```bash
 cargo run -- start --no-tui     # your own surfpool build on 8899
-npx solana-mobile localnet      # attaches to it, forwards it, no container
+npx solana-mobile@latest localnet      # attaches to it, forwards it, no container
 ```
 
 Docker is only needed when localnet actually has to start a container. It never stops a validator it did not start,
@@ -262,15 +262,15 @@ not from the rest of the network.
 
 ```bash
 # Validator published on host port 9899; the device still uses http://localhost:8899
-npx solana-mobile localnet start --port 9899
+npx solana-mobile@latest localnet start --port 9899
 ```
 
 `--engine` and the host port options are read back from the running container, so a detached session does not need
 them repeated:
 
 ```bash
-npx solana-mobile localnet start --detach --engine test-validator --port 9899
-npx solana-mobile localnet status   # reports test-validator on 9899
+npx solana-mobile@latest localnet start --detach --engine test-validator --port 9899
+npx solana-mobile@latest localnet status   # reports test-validator on 9899
 ```
 
 `localnet check` verifies two things separately, because neither alone covers the path: a real JSON-RPC call from
@@ -287,25 +287,25 @@ config in `AndroidManifest.xml`.
 
 ```bash
 # Create a project interactively
-npx solana-mobile create
+npx solana-mobile@latest create
 
 # Create a project with the minimal template
-npx solana-mobile create my-app --minimal
+npx solana-mobile@latest create my-app --minimal
 
 # Create a project with a package manager
-npx solana-mobile create my-app --package-manager pnpm
+npx solana-mobile@latest create my-app --package-manager pnpm
 
 # Create a project with a specific template
-npx solana-mobile create my-app --template expo-kit-wallet
+npx solana-mobile@latest create my-app --template expo-kit-wallet
 
 # Create a project from a template on disk
-npx solana-mobile create my-app --template ../templates/mobile/expo-kit-wallet
+npx solana-mobile@latest create my-app --template ../templates/mobile/expo-kit-wallet
 
 # List template ids as JSON
-npx solana-mobile create --list-template-ids
+npx solana-mobile@latest create --list-template-ids
 
 # List templates
-npx solana-mobile create --list-templates
+npx solana-mobile@latest create --list-templates
 ```
 
 ### Wrap a web app in an Android WebView shell
@@ -317,19 +317,19 @@ and colors from it.
 
 ```bash
 # Generate a project, answering prompts for the missing values
-npx solana-mobile webshell init my-app --url https://example.com
+npx solana-mobile@latest webshell init my-app --url https://example.com
 
 # Seed the project from a manifest instead
-npx solana-mobile webshell init my-app --manifest https://example.com/manifest.json
+npx solana-mobile@latest webshell init my-app --manifest https://example.com/manifest.json
 
 # Build the signed release APK
-npx solana-mobile webshell build my-app
+npx solana-mobile@latest webshell build my-app
 
 # Build without password prompts
-SOLANA_MOBILE_KEYSTORE_PASSWORD=secret SOLANA_MOBILE_KEY_PASSWORD=secret npx solana-mobile webshell build my-app
+SOLANA_MOBILE_KEYSTORE_PASSWORD=secret SOLANA_MOBILE_KEY_PASSWORD=secret npx solana-mobile@latest webshell build my-app
 
 # Show the full Gradle stack trace on failure
-npx solana-mobile webshell build my-app --stacktrace
+npx solana-mobile@latest webshell build my-app --stacktrace
 ```
 
 Every value resolves flag > manifest > prompt, so `init` also takes `--app-name`, `--application-id`,
@@ -357,9 +357,9 @@ if (inWebshell) {
 ### Check your environment
 
 ```bash
-npx solana-mobile doctor
-npx solana-mobile doctor --json
-npx solana-mobile doctor --verbose
+npx solana-mobile@latest doctor
+npx solana-mobile@latest doctor --json
+npx solana-mobile@latest doctor --verbose
 ```
 
 Doctor checks the system, JavaScript tooling, Java/JDK, Android SDK components, emulators, and physical Android
@@ -373,17 +373,17 @@ exit code `1`; warnings do not.
 
 ```bash
 # Check the Expo project in the current directory
-npx solana-mobile release check
+npx solana-mobile@latest release check
 
 # Check an app in a monorepo subdirectory
-npx solana-mobile release check apps/mobile
+npx solana-mobile@latest release check apps/mobile
 
 # Print a stable JSON report, or include diagnostic details
-npx solana-mobile release check --json
-npx solana-mobile release check --verbose
+npx solana-mobile@latest release check --json
+npx solana-mobile@latest release check --verbose
 
 # Also check the APK you are about to submit
-npx solana-mobile release check --apk android/app/build/outputs/apk/release/app-release.apk
+npx solana-mobile@latest release check --apk android/app/build/outputs/apk/release/app-release.apk
 ```
 
 Checks an Expo project against what a Solana dApp Store release needs: an app name, a real `android.package` (not the
@@ -408,14 +408,42 @@ relative to the current directory.
 The command is read-only: it never installs dependencies, runs prebuild or edits the project. A failed check produces
 exit code `1`; warnings do not, but they keep the report from ending in the green verdict.
 
+### Build an app for a dApp Store release
+
+```bash
+# Build, sign and check the release APK of the Expo project in the current directory
+npx solana-mobile@latest release build --keystore-path release.jks --keystore-alias upload
+
+# Build an app in a monorepo subdirectory without password prompts (read the password once, unechoed, so it stays out of shell history)
+read -rs SOLANA_MOBILE_KEYSTORE_PASSWORD && export SOLANA_MOBILE_KEYSTORE_PASSWORD
+npx solana-mobile@latest release build apps/mobile --keystore-path release.jks --keystore-alias upload
+
+# Write the APK somewhere else, and show Gradle's stack trace on failure
+npx solana-mobile@latest release build --keystore-path release.jks --keystore-alias upload --out dist/app.apk --stacktrace
+```
+
+Runs the `release check` project checks first and stops on any failure except the signing row, which the build handles
+separately. Unless git tracks `android/`, `expo prebuild` regenerates it from the app config (it never installs
+dependencies), then the project's own Gradle wrapper builds the release variant. With `--keystore-path` and
+`--keystore-alias`, `apksigner` signs the APK with that key, replacing the debug signature the prebuild template gives
+release builds; without them, the release build type has to carry its own signing config, for example from a config
+plugin. The keystore is never created for you: the dApp Store key is one to make deliberately. The passwords are read
+from `SOLANA_MOBILE_KEYSTORE_PASSWORD` and `SOLANA_MOBILE_KEY_PASSWORD` or prompted for, and never appear in a command
+line.
+
+The APK is written next to Gradle's output as `<package>-<version>-<versionCode>.apk`, or to `--out`, and is then
+checked like `release check --apk`; a failed check exits `1`. When signing with a keystore, `--out` cannot be Gradle's
+own APK output. Building needs JDK 17+, the Android SDK and its Build-Tools. Gradle reports its own toolchain errors;
+when signing with a keystore, the CLI checks for `apksigner` before Gradle runs.
+
 ### Check a template repository
 
 ```bash
 # Check the template repository in the current directory
-npx solana-mobile templates check
+npx solana-mobile@latest templates check
 
 # Check a template repository somewhere else
-npx solana-mobile templates check --root ../solana-mobile-templates
+npx solana-mobile@latest templates check --root ../solana-mobile-templates
 ```
 
 The command reads the repository and reports every problem it finds — invalid template manifests, missing or
@@ -427,10 +455,10 @@ themselves are valid. Nothing is written; problems produce exit code `1`, which 
 
 ```bash
 # Generate artifacts for the template repository in the current directory
-npx solana-mobile templates generate
+npx solana-mobile@latest templates generate
 
 # Generate artifacts for a template repository somewhere else
-npx solana-mobile templates generate --root ../solana-mobile-templates
+npx solana-mobile@latest templates generate --root ../solana-mobile-templates
 ```
 
 The command renders the same artifacts `templates check` compares against and writes the ones that are missing or out
@@ -441,13 +469,13 @@ written, so `generate` never turns template problems into stale artifacts.
 
 ```bash
 # Preview a sync from the current directory into another template repository
-npx solana-mobile templates sync ../solana-foundation-templates --dry-run
+npx solana-mobile@latest templates sync ../solana-foundation-templates --dry-run
 
 # Sync the templates
-npx solana-mobile templates sync ../solana-foundation-templates
+npx solana-mobile@latest templates sync ../solana-foundation-templates
 
 # Sync from a template repository somewhere else
-npx solana-mobile templates sync ../solana-foundation-templates --root ../solana-mobile-templates
+npx solana-mobile@latest templates sync ../solana-foundation-templates --root ../solana-mobile-templates
 ```
 
 The command mirrors every group declared in the source repository's `repokit.groups` into the target repository.
@@ -464,7 +492,7 @@ be regenerated in the target afterwards because template ids embed the repositor
 ### Show command help
 
 ```bash
-npx solana-mobile
+npx solana-mobile@latest
 ```
 
 ### Create options

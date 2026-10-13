@@ -8,6 +8,16 @@ export interface ReleaseCheckResult {
   status: ReleaseCheckStatus
 }
 
+export interface ReleaseBuildCommandOptions {
+  directory?: string
+  keystoreAlias?: string
+  /** The release keystore to sign the APK with, relative to the cwd. */
+  keystorePath?: string
+  /** Where to write the APK, relative to the cwd; next to Gradle's output by default. */
+  out?: string
+  stacktrace?: boolean
+}
+
 export interface ReleaseCheckCommandOptions {
   /** A built APK to check as well, relative to the cwd. */
   apk?: string

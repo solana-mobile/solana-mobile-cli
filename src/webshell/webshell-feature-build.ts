@@ -2,13 +2,13 @@ import { join, resolve } from 'node:path'
 import { cancel, log as clackLog, intro, outro } from '@clack/prompts'
 import type { InteractiveCommandRunner } from '../core/data-access/command-types.ts'
 import { runInteractiveExecutable } from '../core/data-access/run-executable.ts'
-import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import {
-  resolveWebshellSigningPasswords,
-  WEBSHELL_KEY_PASSWORD_ENV,
-  WEBSHELL_KEYSTORE_PASSWORD_ENV,
-  type WebshellPasswordPrompt,
-} from './data-access/keystore.ts'
+  type PasswordPrompt,
+  resolveSigningPasswords,
+  SIGNING_KEY_PASSWORD_ENV,
+  SIGNING_KEYSTORE_PASSWORD_ENV,
+} from '../core/data-access/signing-passwords.ts'
+import { formatCliCommand } from '../core/util/format-cli-command.ts'
 import { readWebshellProjectConfig, WEBSHELL_PROJECT_CONFIG_FILENAME } from './data-access/project-config.ts'
 import type { WebshellBuildCommandOptions } from './data-access/webshell-types.ts'
 
@@ -20,9 +20,9 @@ export interface RunWebshellBuildDependencies {
   log?: (message: string) => void
   outro?: (message: string) => void
   platform?: NodeJS.Platform
-  promptPassword?: WebshellPasswordPrompt
+  promptPassword?: PasswordPrompt
   readProjectConfig?: typeof readWebshellProjectConfig
-  resolvePasswords?: typeof resolveWebshellSigningPasswords
+  resolvePasswords?: typeof resolveSigningPasswords
   runInteractiveCommand?: InteractiveCommandRunner
 }
 
@@ -45,7 +45,7 @@ export async function runWebshellBuild(
     platform = process.platform,
     promptPassword,
     readProjectConfig = readWebshellProjectConfig,
-    resolvePasswords = resolveWebshellSigningPasswords,
+    resolvePasswords = resolveSigningPasswords,
     runInteractiveCommand = runInteractiveExecutable,
   } = dependencies
 
@@ -87,8 +87,8 @@ export async function runWebshellBuild(
 
       // Passwords must never appear in argv — only in the child env.
       command.push(`-PSOLANA_MOBILE_KEYSTORE_PATH=${keystorePath}`, `-PSOLANA_MOBILE_KEYSTORE_ALIAS=${keystoreAlias}`)
-      childEnv[WEBSHELL_KEYSTORE_PASSWORD_ENV] = passwords.keystorePassword
-      childEnv[WEBSHELL_KEY_PASSWORD_ENV] = passwords.keyPassword
+      childEnv[SIGNING_KEYSTORE_PASSWORD_ENV] = passwords.keystorePassword
+      childEnv[SIGNING_KEY_PASSWORD_ENV] = passwords.keyPassword
     } else {
       log('No signing keystore configured. Gradle will produce an unsigned release APK.')
     }
