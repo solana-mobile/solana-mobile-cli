@@ -325,8 +325,9 @@ npx solana-mobile@latest webshell init my-app --manifest https://example.com/man
 # Build the signed release APK
 npx solana-mobile@latest webshell build my-app
 
-# Build without password prompts
-SOLANA_MOBILE_KEYSTORE_PASSWORD=secret SOLANA_MOBILE_KEY_PASSWORD=secret npx solana-mobile@latest webshell build my-app
+# Build without password prompts (read the password once, unechoed, so it stays out of shell history)
+read -rs SOLANA_MOBILE_KEYSTORE_PASSWORD && export SOLANA_MOBILE_KEYSTORE_PASSWORD
+npx solana-mobile@latest webshell build my-app
 
 # Show the full Gradle stack trace on failure
 npx solana-mobile@latest webshell build my-app --stacktrace
