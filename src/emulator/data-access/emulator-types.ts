@@ -126,8 +126,7 @@ export interface InstalledAvd {
 }
 
 export interface ListEmulatorStatusesDependencies
-  extends ListInstalledAvdsDependencies,
-    ListRunningEmulatorsDependencies {}
+  extends ListInstalledAvdsDependencies, ListRunningEmulatorsDependencies {}
 
 export interface ListInstalledAvdsDependencies {
   getHomeDirectory?: HomeDirectoryResolver

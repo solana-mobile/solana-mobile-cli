@@ -15,9 +15,7 @@ import { listRunningEmulators } from './data-access/list-running-emulators.ts'
 import { selectInstalledEmulatorNames } from './ui/emulator-ui-select-installed-emulator-names.ts'
 
 interface RunEmulatorDeleteDependencies
-  extends DeleteInstalledAvdsDependencies,
-    ListInstalledAvdsDependencies,
-    PromptDependencies {
+  extends DeleteInstalledAvdsDependencies, ListInstalledAvdsDependencies, PromptDependencies {
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void

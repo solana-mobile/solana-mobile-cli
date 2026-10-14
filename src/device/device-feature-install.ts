@@ -19,10 +19,7 @@ import { resolveTargetDevices } from './ui/device-ui-resolve-target-device.ts'
 import { selectCatalogApkNames } from './ui/device-ui-select-catalog-apks.ts'
 
 interface RunDeviceInstallDependencies
-  extends AdbDependencies,
-    DownloadApkDependencies,
-    PromptDependencies,
-    ResolveApkArgsDependencies {
+  extends AdbDependencies, DownloadApkDependencies, PromptDependencies, ResolveApkArgsDependencies {
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void

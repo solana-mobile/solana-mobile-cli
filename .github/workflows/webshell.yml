@@ -17,7 +17,7 @@ on:
   # Gradle resolves the template's dependencies from live repositories, which can break with no
   # pull request attached, so exercise the full build on a schedule too.
   schedule:
-    - cron: "0 6 * * *"
+    - cron: '0 6 * * *'
 
   workflow_dispatch:
 
@@ -42,7 +42,7 @@ jobs:
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
       - name: Install Android packages
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37.0' 'build-tools;37.0.0'

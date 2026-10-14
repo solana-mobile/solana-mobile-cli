@@ -17,8 +17,6 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { createApp } from '../src/app.ts'
-import type { TemplatesCheckCommandOptions } from '../src/templates/templates-feature-check.ts'
-import type { TemplatesGenerateCommandOptions } from '../src/templates/templates-feature-generate.ts'
 import {
   applyTemplateSync,
   checkTemplateRepository,
@@ -33,6 +31,8 @@ import {
   type TrackedFile,
   writeTemplateRepository,
 } from '../src/templates.ts'
+import type { TemplatesCheckCommandOptions } from '../src/templates/templates-feature-check.ts'
+import type { TemplatesGenerateCommandOptions } from '../src/templates/templates-feature-generate.ts'
 
 const fixtureRoot = new URL('./fixtures/template-repository/', import.meta.url)
 const expectedArtifacts = [

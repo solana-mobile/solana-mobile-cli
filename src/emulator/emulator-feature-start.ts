@@ -14,9 +14,7 @@ import { waitAndTuneEmulator } from './emulator-feature-tune.ts'
 import { selectInstalledEmulatorName } from './ui/emulator-ui-select-installed-emulator-name.ts'
 
 interface RunEmulatorStartDependencies
-  extends PromptDependencies,
-    StartEmulatorDependencies,
-    WaitForEmulatorBootDependencies {
+  extends PromptDependencies, StartEmulatorDependencies, WaitForEmulatorBootDependencies {
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
