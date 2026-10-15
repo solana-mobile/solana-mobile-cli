@@ -47,8 +47,6 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: bun pkg-pr-new publish --packageManager=bun .
 
-
-
   check-types:
     runs-on: ubuntu-latest
     steps:

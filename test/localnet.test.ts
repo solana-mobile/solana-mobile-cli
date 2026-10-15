@@ -45,11 +45,11 @@ import {
 import { parseProbeExitCode, probeDevicePort } from '../src/localnet/data-access/probe-device-port.ts'
 import { probeRpc } from '../src/localnet/data-access/probe-rpc.ts'
 import { waitForAbort } from '../src/localnet/data-access/watch-forwards.ts'
-import { createLocalnetCommand } from '../src/localnet/localnet-feature.ts'
 import { createLocalnetCheckReport } from '../src/localnet/localnet-feature-check.ts'
 import { runLocalnetStart } from '../src/localnet/localnet-feature-start.ts'
 import { createLocalnetStatusReport } from '../src/localnet/localnet-feature-status.ts'
 import { removeLocalnetForwards, runLocalnetStop } from '../src/localnet/localnet-feature-stop.ts'
+import { createLocalnetCommand } from '../src/localnet/localnet-feature.ts'
 import { endpointsMessage } from '../src/localnet/ui/localnet-ui-messages.ts'
 
 const SURFPOOL_PORTS: ResolvedLocalnetPort[] = [

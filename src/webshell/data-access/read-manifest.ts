@@ -94,13 +94,13 @@ function parseBubblewrapManifest(loaded: LoadedJsonSource, manifest: JsonObject)
 function isBubblewrapManifest(manifest: JsonObject): boolean {
   return Boolean(
     asString(manifest.packageId) ??
-      asString(manifest.applicationId) ??
-      asString(manifest.launcherName) ??
-      asString(manifest.host) ??
-      asString(manifest.webManifestUrl) ??
-      asString(manifest.generatorApp) ??
-      asString(manifest.fallbackType) ??
-      (asObjectOrUndefined(manifest.signingKey) ? 'signingKey' : undefined),
+    asString(manifest.applicationId) ??
+    asString(manifest.launcherName) ??
+    asString(manifest.host) ??
+    asString(manifest.webManifestUrl) ??
+    asString(manifest.generatorApp) ??
+    asString(manifest.fallbackType) ??
+    (asObjectOrUndefined(manifest.signingKey) ? 'signingKey' : undefined),
   )
 }
 

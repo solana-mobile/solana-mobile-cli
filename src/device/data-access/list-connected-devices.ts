@@ -8,9 +8,9 @@ import { isUsableDevice, listAdbDevices } from './list-adb-devices.ts'
  * for physical devices. Names are best-effort — an `offline` or `unauthorized` device rejects shell
  * commands, and a healthy one losing its name is no reason to drop it from the list.
  */
-export async function listConnectedDevices({
-  runCommand = runExecutable,
-}: AdbDependencies = {}): Promise<ConnectedDevice[]> {
+export async function listConnectedDevices({ runCommand = runExecutable }: AdbDependencies = {}): Promise<
+  ConnectedDevice[]
+> {
   const devices = await listAdbDevices({ runCommand })
 
   return Promise.all(

@@ -20,7 +20,8 @@ import { waitAndTuneEmulator } from './emulator-feature-tune.ts'
 import { promptEmulatorName } from './ui/emulator-ui-prompt-emulator-name.ts'
 
 interface RunEmulatorCreateDependencies
-  extends CreateAvdDependencies,
+  extends
+    CreateAvdDependencies,
     InstallEmulatorSystemImageDependencies,
     StartEmulatorDependencies,
     WaitForEmulatorBootDependencies {

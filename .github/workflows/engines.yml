@@ -16,7 +16,7 @@ on:
 
   # Upstream images can break with no pull request attached, so check them on a schedule too.
   schedule:
-    - cron: "0 6 * * *"
+    - cron: '0 6 * * *'
 
   workflow_dispatch:
 

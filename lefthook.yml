@@ -1,8 +1,8 @@
 pre-commit:
   commands:
-    biome:
-      glob: "**/*.{cjs,cts,js,json,mjs,mts,ts}"
-      run: bun x biome check --write "{staged_files}"
+    oxc:
+      glob: '**/*.{cjs,cts,js,json,md,mjs,mts,ts,yaml,yml}'
+      run: bun x oxlint --deny-warnings --fix --no-error-on-unmatched-pattern {staged_files} && bun x oxfmt --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
 pre-push:

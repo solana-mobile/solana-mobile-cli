@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [".claude", "src/playground/web/playground-page.generated.ts", "templates"],
+  "plugins": ["import", "oxc", "typescript", "unicorn"],
+  "rules": {
+    "no-else-return": "error",
+    "sort-keys": ["error", "asc", { "caseSensitive": false, "natural": true }]
+  }
+}

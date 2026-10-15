@@ -1,3 +1,6 @@
+import type { Chain } from '@solana-mobile/mobile-wallet-adapter-protocol'
+import { type KitMobileWallet, transact } from '@solana-mobile/mobile-wallet-adapter-protocol-kit'
+import { getTransferSolInstruction } from '@solana-program/system'
 import {
   type Address,
   appendTransactionMessageInstruction,
@@ -15,9 +18,6 @@ import {
   setTransactionMessageLifetimeUsingBlockhash,
   type Transaction,
 } from '@solana/kit'
-import type { Chain } from '@solana-mobile/mobile-wallet-adapter-protocol'
-import { type KitMobileWallet, transact } from '@solana-mobile/mobile-wallet-adapter-protocol-kit'
-import { getTransferSolInstruction } from '@solana-program/system'
 import type { PlaygroundConfig, PlaygroundEvent, PlaygroundEventKind } from '../data-access/playground-types.ts'
 
 const AUTH_TOKEN_KEY = 'solana-mobile-playground:auth-token'

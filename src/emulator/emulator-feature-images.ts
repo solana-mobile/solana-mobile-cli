@@ -43,9 +43,7 @@ interface RunEmulatorImagesDependencies {
 }
 
 interface RunEmulatorImagesDeleteDependencies
-  extends ListInstalledAvdsDependencies,
-    PromptDependencies,
-    SystemImagePackageManagerDependencies {
+  extends ListInstalledAvdsDependencies, PromptDependencies, SystemImagePackageManagerDependencies {
   cancel?: (message: string) => void
   formatCommand?: typeof formatCliCommand
   intro?: (message: string) => void
@@ -56,9 +54,7 @@ interface RunEmulatorImagesDeleteDependencies
 }
 
 export interface InstallEmulatorSystemImageDependencies
-  extends ListAvailableSystemImagesDependencies,
-    PromptDependencies,
-    SystemImagePackageManagerDependencies {
+  extends ListAvailableSystemImagesDependencies, PromptDependencies, SystemImagePackageManagerDependencies {
   architecture?: string
   log?: (message: string) => void
   spinner?: typeof spinner

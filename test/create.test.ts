@@ -522,21 +522,14 @@ describe('validate project name', () => {
     expect(validateProjectName(name)).toBeUndefined()
   })
 
-  test.each([
-    '-app',
-    '9lives',
-    '@scope/app',
-    'My-App',
-    'app-',
-    'my app',
-    'my--app',
-    'my.app',
-    'my_app',
-  ])('rejects %p', (name) => {
-    expect(validateProjectName(name)).toBe(
-      'Please enter a valid project name (lowercase letters, numbers, and single dashes, starting with a letter)',
-    )
-  })
+  test.each(['-app', '9lives', '@scope/app', 'My-App', 'app-', 'my app', 'my--app', 'my.app', 'my_app'])(
+    'rejects %p',
+    (name) => {
+      expect(validateProjectName(name)).toBe(
+        'Please enter a valid project name (lowercase letters, numbers, and single dashes, starting with a letter)',
+      )
+    },
+  )
 
   test('rejects an empty name', () => {
     expect(validateProjectName('')).toBe('Please enter at least 1 character')
