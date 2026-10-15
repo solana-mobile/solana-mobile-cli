@@ -12,12 +12,18 @@ import {
   parsePublishedPorts,
 } from '../src/localnet/data-access/docker-engine.ts'
 import {
+  datasourceConflictMessage,
+  datasourceLabel,
   localnetDeviceRpcUrl,
   localnetEndpoints,
   localnetRpcUrl,
   parseLocalnetEngineId,
+  parseLocalnetNetworkId,
+  parseLocalnetRpcUrl,
   planEngineAction,
+  redactDatasourceLabel,
   resolveLocalnet,
+  resolveLocalnetDatasource,
   resolveLocalnetForContainer,
 } from '../src/localnet/data-access/localnet-engines.ts'
 import type {
@@ -82,7 +88,8 @@ const alwaysReachable = async () => ({ result: 'ok' })
  * directory, and a test suite has no business touching it.
  */
 function startDependencies(runCommand: CommandRunner, fetchJsonRpc: () => Promise<unknown>) {
-  const state: { cancelled?: string; notes: string[]; stored: OwnedForward[] | undefined } = {
+  const state: { cancelled?: string; logs: string[]; notes: string[]; stored: OwnedForward[] | undefined } = {
+    logs: [],
     notes: [],
     stored: undefined,
   }
@@ -94,7 +101,9 @@ function startDependencies(runCommand: CommandRunner, fetchJsonRpc: () => Promis
       },
       fetchJsonRpc,
       intro: () => {},
-      log: () => {},
+      log: (message: string) => {
+        state.logs.push(message)
+      },
       note: (message: string) => {
         state.notes.push(message)
       },
@@ -468,6 +477,116 @@ describe('localnet engines', () => {
   })
 })
 
+describe('localnet datasources', () => {
+  test('rejects unknown networks', () => {
+    expect(parseLocalnetNetworkId('devnet')).toBe('devnet')
+    expect(() => parseLocalnetNetworkId('mainnet-beta')).toThrow('Unknown network: mainnet-beta')
+  })
+
+  test('rejects an rpc url that would silently start the validator offline', () => {
+    expect(parseLocalnetRpcUrl(' https://rpc.example.com ')).toBe('https://rpc.example.com')
+    for (const value of [
+      '',
+      '   ',
+      'https://rpc.example.com/?key=first second',
+      'rpc.example.com',
+      'ws://rpc.example.com',
+    ]) {
+      expect(() => parseLocalnetRpcUrl(value)).toThrow('Invalid RPC URL')
+    }
+  })
+
+  test('keeps rpc url credentials out of displayed datasources', () => {
+    // RPC providers put API keys in the path or query; only scheme and host are shown.
+    expect(redactDatasourceLabel('rpc-url=https://mainnet.helius-rpc.com/?api-key=secret clone=abc')).toBe(
+      'rpc-url=https://mainnet.helius-rpc.com/… clone=abc',
+    )
+    expect(redactDatasourceLabel('rpc-url=https://rpc.example.com/v2/secret')).toBe('rpc-url=https://rpc.example.com/…')
+    expect(redactDatasourceLabel('rpc-url=https://user:secret@rpc.example.com')).toBe(
+      'rpc-url=https://rpc.example.com/…',
+    )
+    expect(redactDatasourceLabel('rpc-url=http://localhost:8899')).toBe('rpc-url=http://localhost:8899')
+    expect(redactDatasourceLabel('network=devnet')).toBe('network=devnet')
+    expect(
+      datasourceConflictMessage('rpc-url=https://rpc.example.com/?key=secret', 'rpc-url=https://other.example.com/x'),
+    ).not.toContain('secret')
+  })
+
+  test('forks surfpool from a network instead of running offline', () => {
+    const command = buildDockerRunCommand(resolveLocalnet('surfpool', { datasource: { network: 'devnet' } })).join(' ')
+
+    expect(command).toContain('--network devnet')
+    expect(command).not.toContain('--offline')
+    // Recorded on the container so a later `start` can tell what the running validator forks from.
+    expect(command).toContain('--label localnet.datasource=network=devnet')
+  })
+
+  test('forks surfpool from a custom rpc url', () => {
+    const command = buildDockerRunCommand(
+      resolveLocalnet('surfpool', { datasource: { rpcUrl: 'https://rpc.example.com' } }),
+    ).join(' ')
+
+    expect(command).toContain('--rpc-url https://rpc.example.com')
+    expect(command).not.toContain('--offline')
+  })
+
+  test('passes url and clones to the test-validator, repeating the image command', () => {
+    // Arguments replace the image's default command, so the binary itself has to come back first.
+    const command = buildDockerRunCommand(
+      resolveLocalnet('test-validator', {
+        datasource: {
+          clone: ['4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'],
+          cloneUpgradeableProgram: ['whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc'],
+          network: 'mainnet',
+        },
+      }),
+    ).join(' ')
+
+    // solana-test-validator spells the moniker mainnet-beta, while surfpool calls it mainnet.
+    expect(command).toContain('beeman/solana-test-validator:latest solana-test-validator --url mainnet-beta')
+    expect(command).toContain('--clone 4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU')
+    expect(command).toContain('--clone-upgradeable-program whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc')
+  })
+
+  test('leaves the test-validator command untouched without a datasource', () => {
+    const command = buildDockerRunCommand(resolveLocalnet('test-validator'))
+
+    // The image's own default command starts the validator; no trailing arguments.
+    expect(command[command.length - 1]).toBe('beeman/solana-test-validator:latest')
+  })
+
+  test('rejects a datasource named twice', () => {
+    expect(() =>
+      resolveLocalnetDatasource('surfpool', { network: 'devnet', rpcUrl: 'https://rpc.example.com' }),
+    ).toThrow('--network and --rpc-url both name a datasource')
+  })
+
+  test('rejects clone flags for surfpool, which fetches accounts on demand', () => {
+    expect(() => resolveLocalnetDatasource('surfpool', { clone: ['abc'], network: 'devnet' })).toThrow(
+      'surfpool does not take --clone',
+    )
+  })
+
+  test('rejects clone flags without a cluster to clone from', () => {
+    expect(() => resolveLocalnetDatasource('test-validator', { cloneUpgradeableProgram: ['abc'] })).toThrow(
+      '--clone needs a cluster to clone from',
+    )
+  })
+
+  test('resolves no datasource when nothing was asked for', () => {
+    expect(resolveLocalnetDatasource('surfpool', {})).toBeUndefined()
+    expect(resolveLocalnetDatasource('test-validator', { clone: [] })).toBeUndefined()
+  })
+
+  test('serializes the label identically whatever order the clone flags came in', () => {
+    const label = (clone: string[]) =>
+      datasourceLabel({ clone, cloneUpgradeableProgram: [], kind: 'network', network: 'devnet' })
+
+    expect(label(['b', 'a'])).toBe(label(['a', 'b']))
+    expect(label(['a', 'b'])).toBe('network=devnet clone=a clone=b')
+  })
+})
+
 describe('localnet engine action', () => {
   test('starts a container when nothing is serving the ports', () => {
     expect(planEngineAction({ containerRunning: false, rpcReachable: false })).toBe('start')
@@ -518,6 +637,18 @@ describe('localnet start', () => {
 
     expect(state.cancelled).toBeUndefined()
     expect(calls.some((cmd) => cmd[0] === 'docker' && cmd[1] === 'run')).toBe(true)
+  })
+
+  test('says so when a datasource cannot be applied to an attached validator', async () => {
+    // Attaching reuses a validator someone else started; its datasource is whatever they chose.
+    const { calls, runCommand } = recordingRunner(worldWithoutContainer)
+    const { dependencies, state } = startDependencies(runCommand, alwaysReachable)
+
+    await runLocalnetStart({ detach: true, network: 'devnet' }, dependencies)
+
+    expect(state.cancelled).toBeUndefined()
+    expect(calls.some((cmd) => cmd[0] === 'docker' && cmd[1] === 'run')).toBe(false)
+    expect(state.logs.join('\n')).toContain('Datasource options only apply when localnet starts the validator')
   })
 
   test('leaves an attached validator and its container alone on teardown', async () => {
@@ -921,8 +1052,8 @@ describe('localnet endpoints', () => {
 describe('localnet container session', () => {
   const inspectOutput = (
     status: string,
-    { bindings = '{"8899/tcp":[{"HostIp":"","HostPort":"9899"}]}', label = 'surfpool' } = {},
-  ) => [status, 'none', label, bindings].join('|')
+    { bindings = '{"8899/tcp":[{"HostIp":"","HostPort":"9899"}]}', datasource = '', label = 'surfpool' } = {},
+  ) => [status, 'none', label, bindings, datasource].join('|')
 
   test('reads the host ports the container was published on', () => {
     // Regression guard: only the engine used to be recorded, so `--port 9899` was forgotten the moment
@@ -960,6 +1091,48 @@ describe('localnet container session', () => {
     expect(localnetRpcUrl(resolveLocalnetForContainer(container, { port: 7777 }))).toBe('http://localhost:7777')
   })
 
+  test('reads the datasource label back, even when its url contains the separator', () => {
+    expect(parseContainerStatus(inspectOutput('running', { datasource: 'network=devnet' })).datasource).toBe(
+      'network=devnet',
+    )
+    expect(
+      parseContainerStatus(inspectOutput('running', { datasource: 'rpc-url=https://rpc.example.com?a=1|b=2' }))
+        .datasource,
+    ).toBe('rpc-url=https://rpc.example.com?a=1|b=2')
+    // Missing labels print as empty or `<no value>` depending on the docker version.
+    expect(parseContainerStatus(inspectOutput('running')).datasource).toBeUndefined()
+    expect(parseContainerStatus(inspectOutput('running', { datasource: '<no value>' })).datasource).toBeUndefined()
+  })
+
+  test('rejects a datasource that conflicts with the running container', () => {
+    const running = parseContainerStatus(inspectOutput('running', { datasource: 'network=devnet' }))
+
+    // Reuse cannot change where the running validator forks from, so pretending would be worse.
+    expect(() => resolveLocalnetForContainer(running, { network: 'mainnet' })).toThrow(
+      'The running container was started with datasource network=devnet',
+    )
+    // An offline container conflicts with any requested datasource.
+    expect(() =>
+      resolveLocalnetForContainer(parseContainerStatus(inspectOutput('running')), { network: 'devnet' }),
+    ).toThrow('The running container was started offline')
+    // A container without an engine label is still running something, so the datasource still conflicts.
+    expect(() =>
+      resolveLocalnetForContainer(parseContainerStatus(inspectOutput('running', { label: '' })), { network: 'devnet' }),
+    ).toThrow('The running container was started offline')
+  })
+
+  test('reuses a running container whose datasource matches, or when none was asked for', () => {
+    const running = parseContainerStatus(inspectOutput('running', { datasource: 'network=devnet' }))
+
+    expect(resolveLocalnetForContainer(running, { network: 'devnet' }).datasource).toMatchObject({ network: 'devnet' })
+    // No datasource requested means reuse whatever is running, exactly like an omitted --engine.
+    expect(() => resolveLocalnetForContainer(running)).not.toThrow()
+    // A stopped container is about to be replaced, so it never conflicts.
+    expect(() =>
+      resolveLocalnetForContainer(parseContainerStatus(inspectOutput('exited')), { network: 'devnet' }),
+    ).not.toThrow()
+  })
+
   test('rejects an engine that conflicts with the running container', () => {
     const container = parseContainerStatus(inspectOutput('running', { label: 'test-validator' }))
 
@@ -993,6 +1166,19 @@ describe('localnet container session', () => {
     const report = await createLocalnetStatusReport({}, { runCommand })
 
     expect(report).toMatchObject({ engine: 'test-validator', rpcUrl: 'http://localhost:9899' })
+  })
+
+  test('reports a custom rpc url datasource without its credentials', async () => {
+    const { runCommand } = recordingRunner((cmd) => {
+      if (cmd[1] === 'inspect')
+        return inspectOutput('running', { datasource: 'rpc-url=https://rpc.example.com/?key=secret' })
+      if (cmd[1] === 'devices') return 'List of devices attached\n'
+      return ''
+    })
+
+    const report = await createLocalnetStatusReport({}, { runCommand })
+
+    expect(report.container.datasource).toBe('rpc-url=https://rpc.example.com/…')
   })
 
   test('reuses the recorded engine instead of defaulting to surfpool', async () => {
@@ -1138,11 +1324,15 @@ describe('localnet command', () => {
 
     expect(startOptions).toEqual([
       {
+        clone: [],
+        cloneUpgradeableProgram: [],
         detach: undefined,
         devices: [],
         engine: undefined,
         image: undefined,
+        network: undefined,
         port: undefined,
+        rpcUrl: undefined,
         studioPort: undefined,
         watch: true,
         wsPort: undefined,
@@ -1162,6 +1352,69 @@ describe('localnet command', () => {
 
     expect(startOptions[0]?.watch).toBe(false)
     expect(startOptions[0]?.detach).toBe(true)
+  })
+
+  test('passes datasource flags through to localnet start', async () => {
+    const startOptions: LocalnetStartCommandOptions[] = []
+    const app = createApp({
+      runLocalnetStart: async (options) => {
+        startOptions.push(options)
+      },
+    })
+
+    await app.parseAsync([
+      'node',
+      'solana-mobile',
+      'localnet',
+      'start',
+      '--engine',
+      'test-validator',
+      '--network',
+      'devnet',
+      '--clone',
+      'AddrOne',
+      '--clone',
+      'AddrTwo',
+      '--clone-upgradeable-program',
+      'ProgramOne',
+    ])
+
+    expect(startOptions[0]).toMatchObject({
+      clone: ['AddrOne', 'AddrTwo'],
+      cloneUpgradeableProgram: ['ProgramOne'],
+      engine: 'test-validator',
+      network: 'devnet',
+    })
+  })
+
+  test('rejects an unknown network at the command line', async () => {
+    const app = createApp({ runLocalnetStart: async () => {} })
+
+    app.exitOverride()
+    app.configureOutput({ writeErr: () => {}, writeOut: () => {} })
+    app.commands
+      .find((command) => command.name() === 'localnet')
+      ?.exitOverride()
+      .configureOutput({ writeErr: () => {}, writeOut: () => {} })
+
+    await expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--network', 'mainnet-beta'])).rejects.toThrow(
+      'Unknown network: mainnet-beta',
+    )
+  })
+
+  test('rejects an empty rpc url at the command line', async () => {
+    const app = createApp({ runLocalnetStart: async () => {} })
+
+    app.exitOverride()
+    app.configureOutput({ writeErr: () => {}, writeOut: () => {} })
+    app.commands
+      .find((command) => command.name() === 'localnet')
+      ?.exitOverride()
+      .configureOutput({ writeErr: () => {}, writeOut: () => {} })
+
+    await expect(app.parseAsync(['node', 'solana-mobile', 'localnet', '--rpc-url', ''])).rejects.toThrow(
+      'Invalid RPC URL',
+    )
   })
 
   test('accepts localnet options on either side of the subcommand', async () => {

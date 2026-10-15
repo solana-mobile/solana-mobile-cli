@@ -29,6 +29,7 @@ import { createInterruptSignal, waitForAbort, watchForwards } from './data-acces
 import { removeLocalnetForwards } from './localnet-feature-stop.ts'
 import {
   attachedMessage,
+  DATASOURCE_NOT_APPLIED_ON_ATTACH_MESSAGE,
   DEVICES_HEADING,
   DOCKER_UNAVAILABLE_MESSAGE,
   devicesMessage,
@@ -99,6 +100,10 @@ export async function runLocalnetStart(
 
     if (action === 'attach') {
       log(attachedMessage(rpcUrl, preflight.version))
+
+      if (localnet.datasource) {
+        log(DATASOURCE_NOT_APPLIED_ON_ATTACH_MESSAGE)
+      }
     } else {
       if (action === 'start') {
         if (!(await isDockerRunning({ runCommand }))) {
