@@ -1,5 +1,30 @@
 # solana-mobile
 
+## 0.7.0
+
+### Minor Changes
+
+- c116073: Let `localnet` fork from a remote datasource instead of always starting an empty, offline chain.
+
+  - `--network devnet|mainnet|testnet` forks the validator from a public cluster, and `--rpc-url` from any RPC
+    endpoint. With surfpool, every account the app touches — programs included, at their original addresses — is
+    fetched from that cluster on first access, and the validator reports the cluster's genesis hash.
+  - `solana-test-validator` does not fetch lazily, so there the datasource is cloned up front: `--clone` names an
+    account and `--clone-upgradeable-program` an upgradeable program to copy in (both repeatable). Clone flags without
+    a datasource, or with surfpool — which needs none — are reported rather than silently ignored, as is naming a
+    datasource with both `--network` and `--rpc-url`.
+  - The datasource is recorded on the container, so `localnet status` reports it and a later `localnet start` refuses
+    to reuse a running validator as a datasource it was not started with. When localnet attaches to a validator it did
+    not start, it says that datasource options do not apply instead of pretending they did.
+
+- 35938a2: Add `release build [directory]`, which builds a signed release APK of an Expo project for the Solana dApp Store. It runs the `release check` project checks, `expo prebuild` unless git tracks `android/`, and the project's Gradle wrapper, signs the APK with `--keystore-path` and `--keystore-alias` through `apksigner`, and checks the result like `release check --apk`. Passwords come from `SOLANA_MOBILE_KEYSTORE_PASSWORD` and `SOLANA_MOBILE_KEY_PASSWORD` or a prompt.
+
+### Patch Changes
+
+- a8bbff5: Suggested follow-up commands and the generated webshell README now invoke `solana-mobile@latest` instead of an untagged package name
+- 07c6610: `webshell init`: without a terminal every prompt that has a default takes it (application id derived from the URL, version `1`/`1.0`, `android.keystore`, alias `android`) and a prompt without one fails with a message naming the flag, so CI only needs `--url` and `--app-name` or a manifest; the keystore prompt now defaults to a bare `android.keystore` relative to the project directory
+- 680d31b: `webshell init`: a root-absolute icon `src` in a local web manifest (such as `/icon-512.png`) now resolves against the manifest's directory instead of the filesystem root, and a manifest whose icons are all unsupported formats warns instead of silently keeping the default launcher icon
+
 ## 0.6.0
 
 ### Minor Changes
