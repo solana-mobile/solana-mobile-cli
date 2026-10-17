@@ -410,7 +410,7 @@ describe('renameAndroidPackage', () => {
 
       const readme = await readFile(join(projectDirectory, 'README.md'), 'utf8')
       expect(readme).toContain('com.example.myapp')
-      expect(readme).toContain('solana-mobile webshell build .')
+      expect(readme).toContain('npx solana-mobile@latest webshell build .')
 
       if (process.platform !== 'win32') {
         expect((await stat(join(projectDirectory, 'gradlew'))).mode & 0o111).not.toBe(0)

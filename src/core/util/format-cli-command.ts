@@ -43,7 +43,7 @@ export function isPackageManagerInvocation(environment: NodeJS.ProcessEnv): bool
 
 export function formatCliCommand(command: string, environment: NodeJS.ProcessEnv = process.env): string {
   const packageRunner = detectPackageRunner(environment)
-  const invocation = packageRunner ? `${packageRunner} solana-mobile` : 'solana-mobile'
+  const invocation = packageRunner ? `${packageRunner} solana-mobile@latest` : 'solana-mobile'
 
   return `${invocation} ${command}`
 }
