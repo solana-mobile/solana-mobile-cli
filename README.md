@@ -539,6 +539,31 @@ npx solana-mobile@latest
 
 - `--root <path>` — Template repository root, defaults to the current directory
 
+## Telemetry
+
+The CLI can send anonymous usage data to help us decide which templates and commands to invest in, and to find crashes. It is off until you say yes: the first interactive run asks once, defaulting to no. CI and runs without a terminal are never asked and never send.
+
+What is sent, to Sentry:
+
+- The command you ran, such as `emulator start`, but never its arguments.
+- The template picked in `create`, when it is one of the built-in templates. Local and external templates are sent as `custom`.
+- Whether the command succeeded, and a stack trace when it crashed, with your home directory replaced by `~`.
+- Your OS, CPU architecture, Node or Bun version and CLI version.
+- A random install ID, generated on your machine, so installs can be counted.
+
+What is never sent: file paths, project or package names, wallet addresses, keypairs, passwords, API keys, environment variables, hostnames or usernames.
+
+```shell
+# Show whether telemetry is on, and where the setting is stored
+npx solana-mobile@latest telemetry status
+
+# Turn telemetry on or off
+npx solana-mobile@latest telemetry enable
+npx solana-mobile@latest telemetry disable
+```
+
+The setting is stored in `$XDG_CONFIG_HOME/solana-mobile/telemetry.json`, or `~/.config/solana-mobile/telemetry.json` when `XDG_CONFIG_HOME` is not set. Setting `DO_NOT_TRACK=1` or `SOLANA_MOBILE_TELEMETRY=0` turns it off regardless of the saved setting, and `SOLANA_MOBILE_TELEMETRY=1` turns it on without asking.
+
 ## Development
 
 Install dependencies and run checks:
