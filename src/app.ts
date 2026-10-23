@@ -13,6 +13,9 @@ import { createEmulatorCommand, type EmulatorCommandDeps } from './emulator/emul
 import { createLocalnetCommand, type LocalnetCommandDeps } from './localnet/localnet-feature.ts'
 import { createPlaygroundCommand, type PlaygroundCommandDeps } from './playground/playground-feature.ts'
 import { createReleaseCommand, type ReleaseCommandDeps } from './release/release-feature.ts'
+import { finishTelemetry, setTelemetryAttributes } from './telemetry/data-access/telemetry-client.ts'
+import { type StartTelemetryOptions, startTelemetry } from './telemetry/telemetry-feature-index.ts'
+import { createTelemetryCommand, type TelemetryCommandDeps } from './telemetry/telemetry-feature.ts'
 import { createTemplatesCommand, type TemplatesCommandDeps } from './templates/templates-feature.ts'
 import { createWebshellCommand, type WebshellCommandDeps } from './webshell/webshell-feature.ts'
 
@@ -23,13 +26,19 @@ export type AppOptions = CreateCommandDeps &
   LocalnetCommandDeps &
   PlaygroundCommandDeps &
   ReleaseCommandDeps &
+  TelemetryCommandDeps &
   TemplatesCommandDeps &
   WebshellCommandDeps & {
     checkForNewerVersion?: (options: VersionCheckOptions) => Promise<VersionCheckResult | undefined>
+    finishTelemetry?: (error?: unknown) => Promise<void>
+    startTelemetry?: (options: StartTelemetryOptions) => Promise<boolean>
   }
 
 export function createApp(appOptions: AppOptions = {}) {
-  const { checkForNewerVersion: checkForNewerVersionFn = checkForNewerVersion } = appOptions
+  const {
+    checkForNewerVersion: checkForNewerVersionFn = checkForNewerVersion,
+    startTelemetry: startTelemetryFn = startTelemetry,
+  } = appOptions
   const metadata = readPackageMetadata()
   const app = new Command()
 
@@ -44,14 +53,20 @@ export function createApp(appOptions: AppOptions = {}) {
   // Runs before every subcommand action. checkForNewerVersion resolves undefined instead of
   // throwing or hanging, so an unreachable registry can never break or stall a command.
   app.hook('preAction', async (_thisCommand, actionCommand) => {
-    if (isSkipVersionCheckSet(actionCommand)) {
-      return
+    if (!isSkipVersionCheckSet(actionCommand)) {
+      const update = await checkForNewerVersionFn({ metadata })
+
+      if (update) {
+        console.error(formatUpdateWarning(update))
+      }
     }
 
-    const update = await checkForNewerVersionFn({ metadata })
+    // `telemetry` manages the setting itself, so it never prompts for or reports on it. Like the
+    // version check, startTelemetry resolves instead of throwing.
+    const commandPath = getCommandPath(actionCommand)
 
-    if (update) {
-      console.error(formatUpdateWarning(update))
+    if (commandPath.split(' ')[0] !== 'telemetry' && (await startTelemetryFn({ metadata }))) {
+      setTelemetryAttributes({ command: commandPath })
     }
   })
 
@@ -65,6 +80,7 @@ export function createApp(appOptions: AppOptions = {}) {
   app.addCommand(createLocalnetCommand(appOptions))
   app.addCommand(createPlaygroundCommand(appOptions))
   app.addCommand(createReleaseCommand(appOptions))
+  app.addCommand(createTelemetryCommand(appOptions))
   app.addCommand(createTemplatesCommand(appOptions))
   app.addCommand(createWebshellCommand(appOptions))
 
@@ -82,6 +98,17 @@ export function createApp(appOptions: AppOptions = {}) {
   }
 
   return app
+}
+
+// The command path without the root, e.g. `emulator start`. Never includes argument values.
+function getCommandPath(command: Command): string {
+  const names: string[] = []
+
+  for (let current: Command | null = command; current?.parent; current = current.parent) {
+    names.unshift(current.name())
+  }
+
+  return names.join(' ')
 }
 
 function isSkipVersionCheckSet(command: Command): boolean {
@@ -109,5 +136,14 @@ export async function runApp(argv = process.argv, options: AppOptions = {}) {
     return
   }
 
-  await app.parseAsync(argv)
+  const { finishTelemetry: finishTelemetryFn = finishTelemetry } = options
+
+  try {
+    await app.parseAsync(argv)
+  } catch (error) {
+    await finishTelemetryFn(error)
+    throw error
+  }
+
+  await finishTelemetryFn()
 }
