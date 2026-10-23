@@ -367,7 +367,7 @@ describe('localnet review fixes', () => {
   test('round trips the ownership record through the store', async () => {
     const files = new Map<string, string>()
     const deps = {
-      getHomeDirectory: () => '/home/test',
+      getTempDirectory: () => '/tmp/test',
       readTextFile: async (path: string) => {
         const contents = files.get(path)
         if (contents === undefined) throw new Error('ENOENT')

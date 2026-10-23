@@ -1,11 +1,10 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
-import type { HomeDirectoryResolver } from '../../emulator/data-access/emulator-types.ts'
+import { readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir, userInfo } from 'node:os'
+import { join } from 'node:path'
 import type { OwnedForward } from './localnet-types.ts'
 
 export interface OwnedForwardsStoreDependencies {
-  getHomeDirectory?: HomeDirectoryResolver
+  getTempDirectory?: () => string
   readTextFile?: (path: string) => Promise<string>
   removeFile?: (path: string) => Promise<void>
   writeTextFile?: (path: string, contents: string) => Promise<void>
@@ -18,9 +17,12 @@ export interface OwnedForwardsStoreDependencies {
  * which case there is no container to label — yet that path still tells the user to clean up with
  * `localnet stop`. Keeping the record outside Docker covers both paths with one mechanism, and it also
  * survives a session that is killed outright rather than interrupted.
+ *
+ * It lives in the temp directory because a reboot drops every reverse it describes. The user name keeps
+ * users apart on a shared `/tmp`.
  */
-export function ownedForwardsPath(getHomeDirectory: HomeDirectoryResolver = homedir): string {
-  return join(getHomeDirectory(), '.solana-mobile', 'localnet-forwards.json')
+export function ownedForwardsPath(getTempDirectory: () => string = tmpdir): string {
+  return join(getTempDirectory(), `solana-mobile-localnet-forwards-${userInfo().username}.json`)
 }
 
 /**
@@ -28,13 +30,13 @@ export function ownedForwardsPath(getHomeDirectory: HomeDirectoryResolver = home
  * "owned nothing" — the two lead to opposite teardown decisions.
  */
 export async function readOwnedForwards({
-  getHomeDirectory = homedir,
+  getTempDirectory = tmpdir,
   readTextFile = (path) => readFile(path, 'utf8'),
 }: OwnedForwardsStoreDependencies = {}): Promise<OwnedForward[] | undefined> {
   let contents: string
 
   try {
-    contents = await readTextFile(ownedForwardsPath(getHomeDirectory))
+    contents = await readTextFile(ownedForwardsPath(getTempDirectory))
   } catch {
     return undefined
   }
@@ -89,19 +91,16 @@ export function mergeOwnedForwards(...sources: readonly (readonly OwnedForward[]
 export async function writeOwnedForwards(
   forwards: readonly OwnedForward[],
   {
-    getHomeDirectory = homedir,
-    writeTextFile = async (path, contents) => {
-      await mkdir(dirname(path), { recursive: true })
-      await writeFile(path, contents, 'utf8')
-    },
+    getTempDirectory = tmpdir,
+    writeTextFile = (path, contents) => writeFile(path, contents, 'utf8'),
   }: OwnedForwardsStoreDependencies = {},
 ): Promise<void> {
-  await writeTextFile(ownedForwardsPath(getHomeDirectory), `${JSON.stringify(forwards)}\n`)
+  await writeTextFile(ownedForwardsPath(getTempDirectory), `${JSON.stringify(forwards)}\n`)
 }
 
 export async function clearOwnedForwards({
-  getHomeDirectory = homedir,
+  getTempDirectory = tmpdir,
   removeFile = (path) => rm(path, { force: true }),
 }: OwnedForwardsStoreDependencies = {}): Promise<void> {
-  await removeFile(ownedForwardsPath(getHomeDirectory))
+  await removeFile(ownedForwardsPath(getTempDirectory))
 }
