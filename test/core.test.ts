@@ -357,6 +357,7 @@ describe('app', () => {
       'localnet',
       'playground',
       'release',
+      'telemetry',
       'templates',
       'webshell',
     ])
@@ -453,7 +454,17 @@ describe('app', () => {
     // passed to `addCommand`, which is how every feature-owned command is registered. Without
     // createApp's copy pass they each lose `showHelpAfterError` (and `enablePositionalOptions`), so
     // this asserts the behaviour on all of them at once rather than one feature at a time.
-    for (const name of ['device', 'doctor', 'emulator', 'localnet', 'playground', 'release', 'templates', 'webshell']) {
+    for (const name of [
+      'device',
+      'doctor',
+      'emulator',
+      'localnet',
+      'playground',
+      'release',
+      'telemetry',
+      'templates',
+      'webshell',
+    ]) {
       const errors: string[] = []
       const app = createApp()
       const command = app.commands.find((child) => child.name() === name)
