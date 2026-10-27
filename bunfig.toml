@@ -1,4 +1,4 @@
 [install]
 exact = true
 minimumReleaseAge = 432000
-minimumReleaseAgeExcludes = ["create-solana-dapp"]
+minimumReleaseAgeExcludes = ["@types/bun", "bun-types", "create-solana-dapp"]
