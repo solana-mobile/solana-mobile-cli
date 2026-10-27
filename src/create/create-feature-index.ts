@@ -16,6 +16,7 @@ import {
   type Template,
   type TemplateJsonTemplate,
 } from 'create-solana-dapp'
+import { setTelemetryAttributes } from '../telemetry/data-access/telemetry-client.ts'
 import { CUSTOM_TEMPLATES_URL } from './data-access/template-catalog.ts'
 import { projectNameSchema, validateProjectName } from './data-access/validate-project-name.ts'
 
@@ -136,6 +137,11 @@ export async function runCreate(
       process.exitCode = 1
       return
     }
+
+    // Local and external templates are reported as `custom`, so their names and paths never leave the machine
+    setTelemetryAttributes({
+      template: templates.includes(template as TemplateJsonTemplate) ? template.name : 'custom',
+    })
 
     const projectName = options.projectName ?? (await promptProjectNameInput(createSolanaDapp, template))
 
