@@ -277,7 +277,7 @@ such as Metro on `8081` — and a reverse you had already set up on a localnet p
 
 `--detach` is one-shot: it applies the forwards and exits, so nothing is left running to re-apply them. Re-run
 `localnet forward` after a device reconnects or reboots, or keep `localnet` in the foreground to have it watched.
-A detached run records which forwards it created in `~/.solana-mobile/localnet-forwards.json` so that a later
+A detached run records which forwards it created in a file in the system temp directory so that a later
 `localnet stop` removes exactly those and leaves everything else alone; `stop` deletes the file when it is done.
 
 The validator is published on `127.0.0.1` only, so it is reachable from this machine and through `adb reverse`, but
