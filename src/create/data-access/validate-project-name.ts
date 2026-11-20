@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { basename, resolve } from 'node:path'
 import { z } from 'zod'
 
 // Vendored from https://github.com/solana-foundation/create-solana-dapp/pull/274.
@@ -25,6 +26,21 @@ export function validateProjectName(name: string): string | undefined {
   }
   // Check if the directory already exists
   if (existsSync(name)) {
+    return 'Directory already exists'
+  }
+  return undefined
+}
+
+// The positional argument is a path: `my-app`, `./apps/my-app` or `/tmp/my-app`. Its last segment
+// becomes the project name, so only that part has to be a valid package name, and the directory
+// check runs against the resolved target instead of the working directory.
+export function validateProjectPath(projectPath: string): string | undefined {
+  const targetDirectory = resolve(projectPath)
+  const result = projectNameSchema.safeParse(basename(targetDirectory))
+  if (!result.success) {
+    return result.error.issues[0]?.message ?? 'Please enter a valid project name'
+  }
+  if (existsSync(targetDirectory)) {
     return 'Directory already exists'
   }
   return undefined

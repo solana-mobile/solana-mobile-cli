@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { cancel, intro, isCancel, log, note, outro, select, text } from '@clack/prompts'
 import {
   type CreateAppArgs,
@@ -17,7 +17,7 @@ import {
   type TemplateJsonTemplate,
 } from 'create-solana-dapp'
 import { CUSTOM_TEMPLATES_URL } from './data-access/template-catalog.ts'
-import { projectNameSchema, validateProjectName } from './data-access/validate-project-name.ts'
+import { projectNameSchema, validateProjectName, validateProjectPath } from './data-access/validate-project-name.ts'
 
 const SOLANA_MOBILE_MENU_CONFIG: MenuConfig = [
   {
@@ -36,7 +36,7 @@ type CreateOptions = {
   listVersions?: boolean
   minimal?: boolean
   packageManager?: PackageManager
-  projectName?: string
+  projectPath?: string
   skipGit?: boolean
   skipInit?: boolean
   skipInstall?: boolean
@@ -100,15 +100,15 @@ export async function runCreate(
       return
     }
 
-    // The positional name flows into the generated package.json and the rename search key, so it
-    // must pass the same validation as the interactive prompt. Validate before fetching template
-    // data so a network failure can't mask the name error, but not for the informational list
-    // commands, which don't create anything.
+    // The positional is a path whose last segment flows into the generated package.json and the
+    // rename search key, so that segment must pass the same validation as the interactive prompt.
+    // Validate before fetching template data so a network failure can't mask the name error, but
+    // not for the informational list commands, which don't create anything.
     const isListCommand = options.listTemplateIds || options.listTemplates
-    if (options.projectName && !isListCommand) {
-      const nameError = createSolanaDapp.validateProjectName(options.projectName)
-      if (nameError) {
-        throw new Error(nameError)
+    if (options.projectPath && !isListCommand) {
+      const pathError = validateProjectPath(options.projectPath)
+      if (pathError) {
+        throw new Error(pathError)
       }
     }
 
@@ -137,14 +137,16 @@ export async function runCreate(
       return
     }
 
-    const projectName = options.projectName ?? (await promptProjectNameInput(createSolanaDapp, template))
+    const projectPath = options.projectPath ?? (await promptProjectNameInput(createSolanaDapp, template))
 
-    if (!projectName) {
+    if (!projectPath) {
       process.exitCode = 1
       return
     }
 
-    const targetDirectory = resolve(process.cwd(), projectName)
+    // `create /tmp/my-app` and `create ./apps/my-app` create the project there under the name `my-app`
+    const targetDirectory = resolve(process.cwd(), projectPath)
+    const projectName = basename(targetDirectory)
     const createArgs: CreateAppArgs = {
       app: createSolanaDapp.getAppInfo(),
       dryRun: options.dryRun ?? false,
@@ -180,7 +182,7 @@ export async function runCreate(
       createSolanaDapp.finalNote({
         ...createArgs,
         instructions,
-        target: createArgs.targetDirectory.replace(process.cwd(), '.'),
+        target: displayTarget(createArgs.targetDirectory),
       }),
       'Installation successful',
     )
@@ -196,6 +198,28 @@ export async function runCreate(
       exit(1)
     }
   }
+}
+
+// The success note shows a `cd` path: `./my-app` inside the working directory, the absolute path
+// outside it. A substring replacement of the working directory would turn a sibling such as
+// `/work/application/my-app` from `/work/app` into `.lication/my-app`. Only the last segment is
+// a validated project name, so a parent segment may contain spaces or `$`; `finalNote` prints the
+// path into `cd` as-is, so it is shell-quoted here to stay copy-paste safe.
+export function displayTarget(targetDirectory: string, cwd = process.cwd(), platform = process.platform): string {
+  const relativeTarget = relative(cwd, targetDirectory)
+  const target = relativeTarget.startsWith('..') || isAbsolute(relativeTarget) ? targetDirectory : `./${relativeTarget}`
+
+  return shellQuote(target, platform)
+}
+
+// Mirrors create-solana-dapp's own `shellQuote`, which it does not export: single quotes take
+// every character literally in POSIX shells, Windows shells only know double quotes.
+function shellQuote(value: string, platform: NodeJS.Platform): string {
+  if (/^[\w./\\:-]+$/.test(value)) {
+    return value
+  }
+
+  return platform === 'win32' ? `"${value.replaceAll('"', '""')}"` : `'${value.replaceAll("'", String.raw`'\''`)}'`
 }
 
 // Templates from the catalog are named with a plain slug, but external (`org/repo`) templates keep
