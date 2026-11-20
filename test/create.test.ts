@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { CreateAppArgs, Template, TemplateJsonTemplate } from 'create-solana-dapp'
 import { createApp } from '../src/app.ts'
 import type { CreateCommandOptions, CreateSolanaDappApi } from '../src/create/create-feature-index.ts'
-import { getInitialProjectName, runCreate } from '../src/create/create-feature-index.ts'
+import { displayTarget, getInitialProjectName, runCreate } from '../src/create/create-feature-index.ts'
 import { MINIMAL_TEMPLATE_NAME } from '../src/create/data-access/template-catalog.ts'
-import { projectNameSchema, validateProjectName } from '../src/create/data-access/validate-project-name.ts'
+import {
+  projectNameSchema,
+  validateProjectName,
+  validateProjectPath,
+} from '../src/create/data-access/validate-project-name.ts'
 
 const template: TemplateJsonTemplate = {
   description: 'A Solana Mobile template',
@@ -70,7 +74,7 @@ describe('create command', () => {
       {
         dryRun: true,
         packageManager: 'pnpm',
-        projectName: 'my-app',
+        projectPath: 'my-app',
         skipGit: true,
         skipInit: true,
         skipInstall: true,
@@ -92,7 +96,7 @@ describe('create command', () => {
     await app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--minimal', '--dry-run'])
 
     expect(createOptions).toEqual([
-      { dryRun: true, minimal: true, projectName: 'my-app', template: 'expo-kit-minimal', templateOptions: [] },
+      { dryRun: true, minimal: true, projectPath: 'my-app', template: 'expo-kit-minimal', templateOptions: [] },
     ])
   })
 
@@ -106,12 +110,12 @@ describe('create command', () => {
 
     await app.parseAsync(['node', 'solana-mobile', 'create', 'my-app', '--minimal', '--reset-project', '--dry-run'])
 
-    expect(createOptions[0]).toMatchObject({ projectName: 'my-app', templateOptions: ['reset-project'] })
+    expect(createOptions[0]).toMatchObject({ projectPath: 'my-app', templateOptions: ['reset-project'] })
   })
 
   test('recovers the project name when a template option precedes it', async () => {
     // commander reroutes operands that follow an unknown option into the leftover args, so the
-    // declared [projectName] argument would resolve to '--reset-project' here.
+    // declared [path] argument would resolve to '--reset-project' here.
     const createOptions: CreateCommandOptions[] = []
     const app = createApp({
       runCreate: async (options) => {
@@ -121,7 +125,7 @@ describe('create command', () => {
 
     await app.parseAsync(['node', 'solana-mobile', 'create', '--reset-project', 'my-app', '--dry-run'])
 
-    expect(createOptions[0]).toMatchObject({ projectName: 'my-app', templateOptions: ['reset-project'] })
+    expect(createOptions[0]).toMatchObject({ projectPath: 'my-app', templateOptions: ['reset-project'] })
   })
 
   test('passes the project name after the -- separator', async () => {
@@ -135,7 +139,7 @@ describe('create command', () => {
 
     await app.parseAsync(['node', 'solana-mobile', 'create', '--reset-project', '--', 'sentinel-app'])
 
-    expect(createOptions[0]).toMatchObject({ projectName: 'sentinel-app', templateOptions: ['reset-project'] })
+    expect(createOptions[0]).toMatchObject({ projectPath: 'sentinel-app', templateOptions: ['reset-project'] })
   })
 
   test('treats dash-prefixed args after -- as positionals, not template options', async () => {
@@ -149,7 +153,7 @@ describe('create command', () => {
     await app.parseAsync(['node', 'solana-mobile', 'create', '--reset-project', '--', '--not-an-option'])
 
     // The invalid name is rejected later by project name validation, not silently collected as an option
-    expect(createOptions[0]).toMatchObject({ projectName: '--not-an-option', templateOptions: ['reset-project'] })
+    expect(createOptions[0]).toMatchObject({ projectPath: '--not-an-option', templateOptions: ['reset-project'] })
   })
 
   test('rejects combining --minimal with --template', async () => {
@@ -177,7 +181,7 @@ describe('create command', () => {
 
     await expect(app.parseAsync(['node', 'solana-mobile', 'create', '-x'])).rejects.toThrow()
 
-    expect(errors.join('')).toContain('Usage: solana-mobile create [options] [projectName]')
+    expect(errors.join('')).toContain('Usage: solana-mobile create [options] [path]')
   })
 
   test('rejects template options that are not boolean long flags', async () => {
@@ -217,7 +221,7 @@ describe('create command', () => {
     await app.parseAsync(['node', 'solana-mobile', 'create', '--', '--not-an-option'])
 
     // Rejected later by project name validation, not silently collected as a template option
-    expect(createOptions[0]).toMatchObject({ projectName: '--not-an-option', templateOptions: [] })
+    expect(createOptions[0]).toMatchObject({ projectPath: '--not-an-option', templateOptions: [] })
   })
 
   test('shows help for create --help instead of collecting it as a template option', async () => {
@@ -244,7 +248,7 @@ describe('create command', () => {
     const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
 
     await runCreate(
-      { projectName: 'my-app', skipInstall: true, template: MINIMAL_TEMPLATE_NAME },
+      { projectPath: 'my-app', skipInstall: true, template: MINIMAL_TEMPLATE_NAME },
       {
         createSolanaDapp,
         selectTemplate: async () => template,
@@ -259,7 +263,7 @@ describe('create command', () => {
     const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
 
     await runCreate(
-      { projectName: 'my-app', skipInstall: true },
+      { projectPath: 'my-app', skipInstall: true },
       {
         createSolanaDapp,
         selectTemplate: async () => template,
@@ -287,7 +291,7 @@ describe('create command', () => {
     const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
 
     await runCreate(
-      { packageManager: 'pnpm', projectName: 'my-app', skipInstall: true },
+      { packageManager: 'pnpm', projectPath: 'my-app', skipInstall: true },
       {
         createSolanaDapp,
         selectTemplate: async () => template,
@@ -306,11 +310,55 @@ describe('create command', () => {
 
     try {
       await runCreate(
-        { projectName: 'My_App', skipInstall: true, template: 'expo-kit-wallet' },
+        { projectPath: 'My_App', skipInstall: true, template: 'expo-kit-wallet' },
         {
           createSolanaDapp,
           selectTemplate: async () => template,
         },
+      )
+
+      expect(createAppArgs).toEqual([])
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = previousExitCode ?? 0
+    }
+  })
+
+  test('creates in an absolute path and names the project after its last segment', async () => {
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    await runCreate(
+      { projectPath: '/tmp/solana-mobile-create-test/reference-app', skipInstall: true, template: 'expo-kit-wallet' },
+      { createSolanaDapp },
+    )
+
+    expect(createAppArgs).toMatchObject([
+      { name: 'reference-app', targetDirectory: resolve('/tmp/solana-mobile-create-test/reference-app') },
+    ])
+  })
+
+  test('resolves a relative path against the working directory', async () => {
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    await runCreate(
+      { projectPath: './apps/my-app/', skipInstall: true, template: 'expo-kit-wallet' },
+      { createSolanaDapp },
+    )
+
+    expect(createAppArgs).toMatchObject([{ name: 'my-app', targetDirectory: resolve(process.cwd(), 'apps/my-app') }])
+  })
+
+  test('rejects a path whose last segment is not a valid project name', async () => {
+    const previousExitCode = process.exitCode
+    const createAppArgs: CreateAppArgs[] = []
+    const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
+
+    try {
+      await runCreate(
+        { projectPath: '/tmp/solana-mobile-create-test/My_App', skipInstall: true, template: 'expo-kit-wallet' },
+        { createSolanaDapp },
       )
 
       expect(createAppArgs).toEqual([])
@@ -326,7 +374,7 @@ describe('create command', () => {
     let selectCalled = false
 
     await runCreate(
-      { projectName: 'my-app', skipInstall: true, template: 'expo-kit-wallet' },
+      { projectPath: 'my-app', skipInstall: true, template: 'expo-kit-wallet' },
       {
         createSolanaDapp,
         selectTemplate: async () => {
@@ -346,7 +394,7 @@ describe('create command', () => {
 
     await runCreate(
       {
-        projectName: 'my-app',
+        projectPath: 'my-app',
         skipInstall: true,
         template: 'expo-kit-wallet',
         templateOptions: ['reset-project'],
@@ -380,6 +428,26 @@ describe('create command', () => {
     expect(promptedTemplate).toBe(template)
   })
 
+  test('shows the success note target relative to the working directory only when inside it', () => {
+    expect(displayTarget('/work/app/my-app', '/work/app')).toBe('./my-app')
+    // `relative` uses the platform separator, so the nested case is `./apps\my-app` on Windows
+    expect(displayTarget('/work/app/apps/my-app', '/work/app')).toBe(`./${join('apps', 'my-app')}`)
+    // A sibling directory sharing the working directory's prefix must not be shown as `.lication/my-app`
+    expect(displayTarget('/work/application/my-app', '/work/app')).toBe('/work/application/my-app')
+    expect(displayTarget('/tmp/my-app', '/work/app')).toBe('/tmp/my-app')
+  })
+
+  test('shell-quotes the success note target when it is not safe to paste as-is', () => {
+    expect(displayTarget('/work/app/my-app', '/work/app', 'linux')).toBe('./my-app')
+    expect(displayTarget('/work/My Org/my-app', '/work/app', 'linux')).toBe("'/work/My Org/my-app'")
+    expect(displayTarget('/work/app/My Org/my-app', '/work/app', 'linux')).toBe(`'./${join('My Org', 'my-app')}'`)
+    // `$team` must reach `cd` literally, not expanded, and an embedded quote must survive
+    expect(displayTarget('/work/$team/my-app', '/work/app', 'linux')).toBe("'/work/$team/my-app'")
+    expect(displayTarget("/work/it's/my-app", '/work/app', 'linux')).toBe(String.raw`'/work/it'\''s/my-app'`)
+    expect(displayTarget('/work/My Org/my-app', '/work/app', 'win32')).toBe('"/work/My Org/my-app"')
+    expect(displayTarget('/work/say "hi"/my-app', '/work/app', 'win32')).toBe('"/work/say ""hi""/my-app"')
+  })
+
   test('derives the initial project name from the template name', () => {
     expect(getInitialProjectName(template)).toBe('expo-kit-wallet')
     // External templates keep their raw reference as the name; only the last segment is usable
@@ -396,7 +464,7 @@ describe('create command', () => {
     const localTemplate = resolve(process.cwd(), 'test/fixtures/template-repository/mobile/example')
 
     await runCreate(
-      { projectName: 'my-app', skipInstall: true, template: localTemplate },
+      { projectPath: 'my-app', skipInstall: true, template: localTemplate },
       { createSolanaDapp, selectTemplate: async () => template },
     )
 
@@ -411,7 +479,7 @@ describe('create command', () => {
     const relativeTemplate = './test/fixtures/template-repository/mobile/example'
 
     await runCreate(
-      { projectName: 'my-app', skipInstall: true, template: relativeTemplate },
+      { projectPath: 'my-app', skipInstall: true, template: relativeTemplate },
       { createSolanaDapp, selectTemplate: async () => template },
     )
 
@@ -427,7 +495,7 @@ describe('create command', () => {
 
     try {
       await runCreate(
-        { projectName: 'my-app', skipInstall: true, template: '/does-not-exist/solana-mobile-template' },
+        { projectPath: 'my-app', skipInstall: true, template: '/does-not-exist/solana-mobile-template' },
         { createSolanaDapp, selectTemplate: async () => template },
       )
 
@@ -443,7 +511,7 @@ describe('create command', () => {
     const createSolanaDapp = createMockCreateSolanaDapp({ createAppArgs })
 
     await runCreate(
-      { projectName: 'my-app', skipInstall: true, template: 'solana-mobile/templates/mobile/expo-kit-anchor' },
+      { projectPath: 'my-app', skipInstall: true, template: 'solana-mobile/templates/mobile/expo-kit-anchor' },
       { createSolanaDapp, selectTemplate: async () => template },
     )
 
@@ -459,7 +527,7 @@ describe('create command', () => {
 
     try {
       await runCreate(
-        { projectName: 'my-app', skipInstall: true, template: 'expo-kit-wallet' },
+        { projectPath: 'my-app', skipInstall: true, template: 'expo-kit-wallet' },
         { createSolanaDapp, exit: (code) => exitCodes.push(code), selectTemplate: async () => template },
       )
 
@@ -478,7 +546,7 @@ describe('create command', () => {
 
     try {
       await runCreate(
-        { projectName: 'My_App', skipInstall: true, template: 'expo-kit-wallet' },
+        { projectPath: 'My_App', skipInstall: true, template: 'expo-kit-wallet' },
         { createSolanaDapp, exit: (code) => exitCodes.push(code), selectTemplate: async () => template },
       )
 
@@ -546,6 +614,23 @@ describe('validate project name', () => {
   test('rejects a valid name when the directory already exists', () => {
     // bun test runs from the repo root, where `src` exists
     expect(validateProjectName('src')).toBe('Directory already exists')
+  })
+
+  test('validates only the last segment of a path', () => {
+    expect(validateProjectPath('/tmp/solana-mobile-create-test/My Org/my-app')).toBeUndefined()
+    expect(validateProjectPath('/tmp/solana-mobile-create-test/My_App')).toBe(
+      'Please enter a valid project name (lowercase letters, numbers, and single dashes, starting with a letter)',
+    )
+  })
+
+  test('ignores a trailing slash on the path', () => {
+    expect(validateProjectPath('/tmp/solana-mobile-create-test/my-app/')).toBeUndefined()
+  })
+
+  test('checks the resolved target directory, not the name in the working directory', () => {
+    // `src` exists in the repo root, but not under the path given
+    expect(validateProjectPath('/tmp/solana-mobile-create-test/src')).toBeUndefined()
+    expect(validateProjectPath('./test/fixtures')).toBe('Directory already exists')
   })
 
   test('does not check the filesystem in the schema alone', () => {
