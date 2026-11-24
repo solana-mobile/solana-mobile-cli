@@ -317,6 +317,9 @@ npx solana-mobile@latest create
 # Create a project with the minimal template
 npx solana-mobile@latest create my-app --minimal
 
+# Create a project in another directory; the last path segment becomes the project name
+npx solana-mobile@latest create ./apps/my-app --minimal
+
 # Create a project with a package manager
 npx solana-mobile@latest create my-app --package-manager pnpm
 

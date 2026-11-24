@@ -14,7 +14,7 @@ export function createCreateCommand({ runCreate: runCreateCommand = runCreate }:
   let templateOptions: string[] = []
 
   const createCommand = new Command('create')
-    .argument('[projectName]')
+    .argument('[path]', 'Directory to create the project in; its last segment becomes the project name')
     .description('Create a new Solana Mobile project')
     .option('--pm, --package-manager <packageManager>', 'Package manager to use', parsePackageManagerOption)
     .option('-d, --dry-run', 'Dry run')
@@ -31,7 +31,7 @@ export function createCreateCommand({ runCreate: runCreateCommand = runCreate }:
       'after',
       '\nOptions declared by the selected template are passed through as boolean long flags, e.g.:\n  $ solana-mobile create my-app --minimal --reset-project',
     )
-    .action(async (projectName: string | undefined, options: CreateCommandOptions) => {
+    .action(async (projectPath: string | undefined, options: CreateCommandOptions) => {
       if (options.minimal && options.template) {
         createCommand.error(
           `error: The --minimal flag can't be used in combination with --template. Please specify only one.`,
@@ -40,7 +40,7 @@ export function createCreateCommand({ runCreate: runCreateCommand = runCreate }:
 
       await runCreateCommand({
         ...options,
-        projectName,
+        projectPath,
         template: options.template ?? (options.minimal ? MINIMAL_TEMPLATE_NAME : undefined),
         templateOptions,
       })
